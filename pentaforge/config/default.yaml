@@ -1,0 +1,38 @@
+# PentaForge highlight config
+# Time formats: HH:MM:SS.ms, MM:SS.ms, or raw seconds
+
+source: "gameplay.mp4"
+output: "highlight_output.mp4"
+
+bgm: "bgm.mp3"
+bgm_volume: 0.3
+
+sfx:
+  double_kill: "sfx/double.mp3"
+  triple_kill: "sfx/triple.mp3"
+  quadra_kill: "sfx/quadra.mp3"
+  penta_kill: "sfx/penta.mp3"
+sfx_volume: 0.85
+
+transitions:
+  type: fade        # fade, dissolve, wipeleft, wiperight, etc.
+  duration: 0.3
+
+export:
+  resolution: "1920x1080"
+  fps: 60
+  codec: "libx264"
+  bitrate: "12M"
+  preset: "medium"
+
+clips:
+  - start: "1:30.5"
+    end:   "1:42.0"
+    kill_type: "triple_kill"
+    label: "First triple kill"
+    # sfx_offset: 9.5   # optional, seconds from clip start
+
+  - start: "5:20.0"
+    end:   "5:35.0"
+    kill_type: "penta_kill"
+    label: "Pentakill teamfight"

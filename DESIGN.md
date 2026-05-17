@@ -1,5 +1,7 @@
 # 英雄联盟高光剪辑工具 — 需求分析与阶段规划
 
+> 最后更新: 2026-05-17
+
 ## 一、项目概述
 
 半自动/自动《英雄联盟》高光剪辑工具，输入游戏录屏视频，自动识别多杀精彩片段，完成音频替换、片段拼接、转场特效，最终导出成品视频。
@@ -33,31 +35,30 @@ Phase 3+ ── 高级视觉特效
 
 ### 3.2 输入
 
-| 输入项 | 说明 |
-|--------|------|
-| 游戏录屏 | 单个或多个视频文件（mp4/mov/avi） |
-| 时间戳配置 | JSON/YAML，标记每个高光片段的起止时间 |
-| BGM 音频 | 背景音乐文件（mp3/wav），可选多段 |
-| 击杀音效 | 击杀提示音效文件（mp3/wav），可选多段对应不同多杀等级 |
-| 导出配置 | 分辨率、码率、帧率、输出格式 |
+| 输入项 | 说明 | 适用模式 |
+|--------|------|----------|
+| 游戏录屏 | 单个或多个视频文件（mp4/mov/avi） | 通用 |
+| 时间戳配置 | JSON/YAML，标记每个高光片段的起止时间 | 通用 |
+| BGM 音频 | 背景音乐文件（mp3/wav），可选多段 | 仅模式 2 |
+| 击杀音效 | 击杀提示音效文件（mp3/wav），对应不同多杀等级 | 仅模式 2 |
+| 导出配置 | 分辨率、码率、帧率、输出格式 | 通用 |
 
 ### 3.3 时间戳配置格式
+
+通过 `audio_enabled` 字段切换音频模式。其他流程（裁剪、拼接、转场、导出）完全一致。
+
+#### 模式 1：保留原声（简洁配置）
 
 ```yaml
 # highlight.yaml
 source: "game_recording_01.mp4"
 output: "highlight_01.mp4"
-bgm: "bgm.mp3"
-bgm_volume: 0.3          # BGM 音量（相对原音）
-sfx:
-  double_kill: "sfx_double.mp3"
-  triple_kill: "sfx_triple.mp3"
-  quadra_kill: "sfx_quadra.mp3"
-  penta_kill: "sfx_penta.mp3"
-sfx_volume: 0.8
+audio_enabled: false        # 关闭音频替换，保留原视频声音
+
 transitions:
-  type: "fade"           # fade / dissolve / wipe / none
-  duration: 0.3           # 秒
+  type: "fade"
+  duration: 0.3
+
 export:
   resolution: "1920x1080"
   fps: 60
@@ -67,7 +68,42 @@ export:
 clips:
   - start: "00:03:15.200"
     end:   "00:03:27.500"
-    kill_type: "triple_kill"    # 决定用什么击杀音效
+    label: "第一波三杀"
+  - start: "00:12:40.000"
+    end:   "00:13:02.000"
+    label: "五杀团战"
+```
+
+#### 模式 2：音频替换（完整配置）
+
+```yaml
+# highlight.yaml
+source: "game_recording_01.mp4"
+output: "highlight_01.mp4"
+audio_enabled: true          # 开启音频替换，剥离原声
+bgm: "bgm.mp3"
+bgm_volume: 0.3
+sfx:
+  double_kill: "assets/sfx/double_kill.mp3"
+  triple_kill: "assets/sfx/triple_kill.mp3"
+  quadra_kill: "assets/sfx/quadra_kill.mp3"
+  penta_kill: "assets/sfx/penta_kill.mp3"
+sfx_volume: 0.8
+
+transitions:
+  type: "fade"
+  duration: 0.3
+
+export:
+  resolution: "1920x1080"
+  fps: 60
+  codec: "h264"
+  bitrate: "12M"
+
+clips:
+  - start: "00:03:15.200"
+    end:   "00:03:27.500"
+    kill_type: "triple_kill"
     label: "第一波三杀"
   - start: "00:12:40.000"
     end:   "00:13:02.000"
@@ -104,9 +140,9 @@ clips:
 #### 模块 B：片段裁剪器
 - 基于 FFmpeg 精确裁剪指定时间段
 - 保留原画质和帧率
-- 可选去除游戏原音频
+- 模式 1：保留原音频；模式 2：去除原音频（由 `audio_enabled` 控制）
 
-#### 模块 C：音频处理器
+#### 模块 C：音频处理器（仅模式 2）
 - 剥离原始游戏音频
 - 混入 BGM（循环/截取适配片段长度）
 - 在击杀时间点叠加击杀音效
@@ -140,12 +176,28 @@ clips:
 | 1.1 | 项目脚手架：目录结构、依赖管理、CLI 入口 | 可运行的空壳 |
 | 1.2 | 配置解析模块：YAML 读取、校验、默认值 | 配置 → 内部数据结构 |
 | 1.3 | 片段裁剪模块：FFmpeg seek + trim | 从源视频切出片段 |
-| 1.4 | 音频处理模块：去原音、混 BGM、叠 SFX | 片段带新音轨 |
+| 1.4 | 音频处理模块：去原音、混 BGM、叠 SFX（仅模式 2） | 片段带新音轨 |
 | 1.5 | 转场拼接模块：concat + transition filters | 多片段合并为单一视频 |
 | 1.6 | 导出模块：编码参数控制、进度反馈 | 最终 mp4 文件 |
 | 1.7 | 集成测试 + 示例配置 | 端到端可跑通 |
 
-### 3.7 Phase 1 成功标准
+### 3.7 双模式说明
+
+两种模式的差异仅限于音频处理，其余流程（裁剪、拼接、转场、导出）完全一致，由 `audio_enabled` 字段控制。
+
+| | 模式 1：保留原声 | 模式 2：音频替换 |
+|---|---|---|
+| `audio_enabled` | `false` | `true` |
+| 视频原声 | 保留，直接拼接 | 剥离，丢弃 |
+| BGM 背景音乐 | 不使用 | 混入，音量可调 |
+| SFX 击杀音效 | 不使用 | 在击杀时间点叠加 |
+| 配置复杂度 | 极简（仅需 clips） | 需配置 bgm/sfx 路径 |
+| 适用场景 | 快速出片、保留解说 | 高光集锦、配乐剪辑 |
+| 后期扩展 | AI 人声分离（分离解说与游戏音效） | — |
+
+> **后期计划：** 模式 1 下可接入 AI 人声分离模型（如 spleeter / demucs），将原视频音轨中的人声（解说）与游戏音效分离，实现"保留击杀播报、去除解说语音"的精细化控制。
+
+### 3.8 Phase 1 成功标准
 
 - [ ] 给定一段录屏 + 一份 YAML 配置，一键产出成品视频
 - [ ] 视频画质无明显损失（与源文件对比 PSNR > 40dB）
