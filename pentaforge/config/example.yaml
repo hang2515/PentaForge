@@ -17,6 +17,8 @@ source: "gameplay.mp4"
 # ---------------------------------------------------------------------------
 output: "highlight_output.mp4"
 
+audio_enabled: true
+
 # ---------------------------------------------------------------------------
 # 背景音乐 (BGM) — 播放贯穿整个高光集锦的背景音乐（可选，留空则无背景音乐）
 # ---------------------------------------------------------------------------
@@ -89,6 +91,9 @@ clips:
     label: "First triple kill"      # 标签，用于日志输出（可选）
     # sfx_offset: 9.5               # SFX 在剪辑内的播放偏移（秒），默认自动放在接近结尾处
     # bgm: "special_bgm.mp3"        # 该剪辑专用的 BGM，覆盖全局 bgm 设置
+    transition_after:               # 到下一段的转场；不写则使用上方默认转场
+      type: fade
+      duration: 0.3
 
   # --- 剪辑 2：五杀团战 ---
   - start: "5:20.0"
@@ -96,6 +101,9 @@ clips:
     kill_type: "penta_kill"
     label: "Pentakill teamfight"
     # 此剪辑未设置 sfx_offset，系统会自动将 SFX 放在剪辑末尾前 1 秒
+    transition_after:
+      type: wipeleft
+      duration: 0.5
 
   # --- 剪辑 3：双杀（无标签、纯秒数写法）---
   - start: 145.0                    # 可直接写秒数

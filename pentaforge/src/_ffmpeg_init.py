@@ -44,6 +44,7 @@ def _ffprobe_path():
 
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d+):(\d+):(\d+\.\d+)")
+_VIDEO_RE = re.compile(r"Video:.*?,\s*(\d+)x(\d+).*?(\d+(?:\.\d+)?)\s*fps")
 
 
 def _probe_fallback(filename):
@@ -62,11 +63,20 @@ def _probe_fallback(filename):
 
     has_video = "Video:" in stderr
     has_audio = "Audio:" in stderr
+    video_stream = {"codec_type": "video"}
+    m = _VIDEO_RE.search(stderr)
+    if m:
+        fps = float(m.group(3))
+        video_stream.update({
+            "width": int(m.group(1)),
+            "height": int(m.group(2)),
+            "r_frame_rate": f"{int(fps)}/1" if fps.is_integer() else f"{fps}/1",
+        })
 
     return {
         "format": {"duration": duration},
         "streams": [
-            *( [{"codec_type": "video"}] if has_video else []),
+            *( [video_stream] if has_video else []),
             *( [{"codec_type": "audio"}] if has_audio else []),
         ],
     }

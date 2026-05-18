@@ -46,6 +46,32 @@ export async function runPipeline(config) {
   return res.json()
 }
 
+export async function detectCandidateClips(payload) {
+  const res = await fetch('/api/detector/candidates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to generate detector candidates')
+  }
+  return res.json()
+}
+
+export async function detectVideoClips(payload) {
+  const res = await fetch('/api/detector/video', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to run video OCR detection')
+  }
+  return res.json()
+}
+
 export async function openFileDialog(title, filetypes) {
   const res = await fetch('/api/file-dialog', {
     method: 'POST',

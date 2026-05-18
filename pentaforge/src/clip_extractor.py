@@ -5,6 +5,11 @@ import os
 import ffmpeg
 
 
+def _has_audio(path: str) -> bool:
+    info = ffmpeg.probe(path)
+    return any(s.get("codec_type") == "audio" for s in info.get("streams", []))
+
+
 def extract_video(
     source: str,
     start: float,
@@ -23,9 +28,12 @@ def extract_video(
 
     stream = ffmpeg.input(source, ss=start, t=duration)
     out_kwargs = {"vcodec": "libx264", "crf": 18, "preset": "veryfast"}
-    if not keep_audio:
+    if keep_audio and _has_audio(source):
+        out_kwargs["acodec"] = "aac"
+        stream = ffmpeg.output(stream.video, stream.audio, output, **out_kwargs)
+    else:
         out_kwargs["an"] = None
-    stream = ffmpeg.output(stream.video, output, **out_kwargs)
+        stream = ffmpeg.output(stream.video, output, **out_kwargs)
     if overwrite:
         stream = stream.global_args("-y")
     ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)

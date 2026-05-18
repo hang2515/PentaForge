@@ -17,6 +17,7 @@
           @update:clips="store.clips = $event"
           @seek="seekVideo"
         />
+        <DetectionPanel />
         <PipelineRunner @start="onPipelineStart" @message="onPipelineMessage" />
       </section>
     </main>
@@ -30,6 +31,7 @@ import { useConfigStore } from './stores/config.js'
 import VideoPreview from './components/VideoPreview.vue'
 import TimelineScrubber from './components/TimelineScrubber.vue'
 import ConfigForm from './components/ConfigForm.vue'
+import DetectionPanel from './components/DetectionPanel.vue'
 import PipelineRunner from './components/PipelineRunner.vue'
 import ProgressOverlay from './components/ProgressOverlay.vue'
 

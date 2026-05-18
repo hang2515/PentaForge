@@ -22,7 +22,7 @@ const defaultSfx = {
 }
 
 function emptyClip() {
-  return { start: 0, end: 5, kill_type: '', label: '', sfx_offset: null, bgm: '' }
+  return { start: 0, end: 5, kill_type: '', label: '', sfx_offset: null, bgm: '', transition_after: null }
 }
 
 export const useConfigStore = defineStore('config', {
@@ -65,6 +65,7 @@ export const useConfigStore = defineStore('config', {
           label: c.label || undefined,
           sfx_offset: c.sfx_offset != null ? c.sfx_offset : undefined,
           bgm: c.bgm || undefined,
+          transition_after: c.transition_after || undefined,
         })),
         temp_dir: this.temp_dir || undefined,
       }
@@ -124,6 +125,7 @@ export const useConfigStore = defineStore('config', {
         label: c.label || '',
         sfx_offset: c.sfx_offset ?? null,
         bgm: c.bgm || '',
+        transition_after: c.transition_after ? { ...defaultTransitions, ...c.transition_after } : null,
       }))
       if (this.clips.length === 0) {
         this.clips = [emptyClip()]

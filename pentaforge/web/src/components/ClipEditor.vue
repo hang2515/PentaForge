@@ -27,6 +27,30 @@
         <label>SFX 偏移 (秒)<input type="number" step="0.1" :value="clip.sfx_offset ?? ''" @input="setField(i, 'sfx_offset', $event.target.value ? parseFloat($event.target.value) : null)" placeholder="自动" /></label>
         <label>独立 BGM<input :value="clip.bgm" @input="setField(i, 'bgm', $event.target.value)" placeholder="使用全局BGM" /></label>
       </div>
+      <div v-if="i < clips.length - 1" class="transition-row">
+        <div class="transition-title">到下一段的转场</div>
+        <div class="clip-row">
+          <label>类型
+            <select :value="transitionFor(clip).type" @change="setTransitionField(i, 'type', $event.target.value)">
+              <option value="fade">淡入淡出</option>
+              <option value="fadeblack">淡黑</option>
+              <option value="fadewhite">淡白</option>
+              <option value="dissolve">溶解</option>
+              <option value="wipeleft">向左擦除</option>
+              <option value="wiperight">向右擦除</option>
+              <option value="wipeup">向上擦除</option>
+              <option value="wipedown">向下擦除</option>
+              <option value="slideleft">向左滑动</option>
+              <option value="slideright">向右滑动</option>
+              <option value="circleopen">圆形打开</option>
+              <option value="circleclose">圆形关闭</option>
+            </select>
+          </label>
+          <label>持续时间 (秒)
+            <input type="number" step="0.1" min="0" :value="transitionFor(clip).duration" @input="setTransitionField(i, 'duration', parseFloat($event.target.value) || 0)" />
+          </label>
+        </div>
+      </div>
     </div>
     <button class="btn" @click="add">+ 添加片段</button>
   </div>
@@ -38,8 +62,12 @@ const emit = defineEmits(['update:clips'])
 
 function updateClips(clips) { emit('update:clips', clips) }
 
+function emptyClip() {
+  return { start: 0, end: 5, kill_type: '', label: '', sfx_offset: null, bgm: '', transition_after: null }
+}
+
 function add() {
-  const clips = [...props.clips, { start: 0, end: 5, kill_type: '', label: '', sfx_offset: null, bgm: '' }]
+  const clips = [...props.clips, emptyClip()]
   updateClips(clips)
 }
 
@@ -56,6 +84,25 @@ function setTime(i, side, e) {
 
 function setField(i, field, value) {
   const clips = props.clips.map((c, j) => j === i ? { ...c, [field]: value } : c)
+  updateClips(clips)
+}
+
+function transitionFor(clip) {
+  return clip.transition_after || { type: 'fade', duration: 0.3 }
+}
+
+function setTransitionField(i, field, value) {
+  const clips = props.clips.map((c, j) => {
+    if (j !== i) return c
+    const current = transitionFor(c)
+    return {
+      ...c,
+      transition_after: {
+        ...current,
+        [field]: value,
+      },
+    }
+  })
   updateClips(clips)
 }
 </script>
@@ -97,6 +144,17 @@ function setField(i, field, value) {
   font-size: 12px;
   width: 100%;
   box-sizing: border-box;
+}
+.transition-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #ead8c8;
+}
+.transition-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5c3d2e;
+  margin-bottom: 4px;
 }
 .dur { color: #d4742b; font-size: 12px; margin-top: auto; }
 .btn { margin-top: 6px; }

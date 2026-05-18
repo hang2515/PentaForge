@@ -1,28 +1,78 @@
-.vscode
-venv
-.venv
-.claude
-node_modules/
-static/
-/__pycache__/
+# Local editor and assistant state
+.vscode/
+.idea/
+.claude/
+
+# Python virtual environments and package/build artifacts
+.venv/
+venv/
+env/
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 *.pyd
-*.pyi
-*.egg-info
 *.egg
-*.manifest
-*.spec
-*.dist-info
-*.egg-info
-*.egg
-*.manifest
-*.spec
-*.dist-info
-*.egg-info
-*.egg
-*.manifest
-*.spec
-*.dist-info
-*.egg-info
+*.egg-info/
+*.dist-info/
+build/
+dist/
+
+# Python test, lint, and coverage caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+# Node dependencies and build output
+node_modules/
+pentaforge/static/
+pentaforge/web/dist/
+pentaforge/web/.vite/
+
+# Local runtime logs and process files
+*.log
+*.pid
+
+# Environment and local-only config
+.env
+.env.*
+!.env.example
+
+# Temporary working directories and generated media
+tmp/
+temp/
+outputs/
+exports/
+*.tmp
+*.bak
+*.part
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.ogg
+*.flac
+
+# OCR/model caches and heavyweight model files
+.cache/
+.paddlex/
+PaddleOCR/
+models/
+*.pdmodel
+*.pdiparams
+*.pdopt
+*.onnx
+*.safetensors
+
+# Keep placeholder asset directories trackable
+!pentaforge/assets/
+!pentaforge/assets/sfx/
+!pentaforge/assets/sfx/.gitkeep

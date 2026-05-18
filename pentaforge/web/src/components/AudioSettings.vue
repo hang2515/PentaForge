@@ -1,21 +1,42 @@
 <template>
   <div class="audio-settings">
     <h3>音频设置</h3>
-    <label class="switch-row">
-      <span>启用音频混音</span>
-      <input type="checkbox" :checked="audioEnabled" @change="$emit('update:audioEnabled', $event.target.checked)" />
-    </label>
-    <label class="file-label">BGM 文件</label>
-    <div class="file-input-row">
-      <input :value="bgm" @input="$emit('update:bgm', $event.target.value)" placeholder="点击浏览选择 BGM 文件" />
-      <button class="btn-browse" @click="browseBgm">浏览</button>
+    <div class="audio-mode" role="group" aria-label="音频模式">
+      <button
+        type="button"
+        :class="{ active: !audioEnabled }"
+        @click="$emit('update:audioEnabled', false)"
+      >
+        <strong>模式 1</strong>
+        <span>保留原声</span>
+      </button>
+      <button
+        type="button"
+        :class="{ active: audioEnabled }"
+        @click="$emit('update:audioEnabled', true)"
+      >
+        <strong>模式 2</strong>
+        <span>替换音频</span>
+      </button>
     </div>
-    <label>BGM 音量 <span class="val">{{ bgmVolume }}</span>
-      <input type="range" min="0" max="1" step="0.05" :value="bgmVolume" @input="$emit('update:bgmVolume', parseFloat($event.target.value))" />
-    </label>
-    <label>SFX 音量 <span class="val">{{ sfxVolume }}</span>
-      <input type="range" min="0" max="1" step="0.05" :value="sfxVolume" @input="$emit('update:sfxVolume', parseFloat($event.target.value))" />
-    </label>
+
+    <div v-if="!audioEnabled" class="mode-note">
+      保留源视频中的原始音频，不使用 BGM 和击杀音效。
+    </div>
+
+    <div v-else class="mix-settings">
+      <label class="file-label">BGM 文件</label>
+      <div class="file-input-row">
+        <input :value="bgm" @input="$emit('update:bgm', $event.target.value)" placeholder="点击浏览选择 BGM 文件" />
+        <button class="btn-browse" @click="browseBgm">浏览</button>
+      </div>
+      <label>BGM 音量 <span class="val">{{ bgmVolume }}</span>
+        <input type="range" min="0" max="1" step="0.05" :value="bgmVolume" @input="$emit('update:bgmVolume', parseFloat($event.target.value))" />
+      </label>
+      <label>SFX 音量 <span class="val">{{ sfxVolume }}</span>
+        <input type="range" min="0" max="1" step="0.05" :value="sfxVolume" @input="$emit('update:sfxVolume', parseFloat($event.target.value))" />
+      </label>
+    </div>
   </div>
 </template>
 
@@ -54,16 +75,41 @@ label {
   color: #8d6e63;
   margin-bottom: 6px;
 }
-.switch-row {
+.audio-mode {
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  color: #5c3d2e;
+  gap: 6px;
   margin-bottom: 8px;
 }
-.switch-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: #e07b3c; }
+.audio-mode button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 8px;
+  background: #f5ede3;
+  border: 1px solid #d4b896;
+  color: #6f5546;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.audio-mode button.active {
+  background: #e07b3c;
+  border-color: #e07b3c;
+  color: #fff;
+}
+.audio-mode strong { font-size: 12px; }
+.audio-mode span { font-size: 11px; }
+.mode-note {
+  padding: 8px;
+  background: #fef9f4;
+  border: 1px solid #ead2b9;
+  border-radius: 4px;
+  color: #8d6e63;
+  font-size: 12px;
+  line-height: 1.4;
+}
 .file-label { margin-bottom: 2px; }
 .file-input-row {
   display: flex;

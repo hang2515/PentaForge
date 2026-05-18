@@ -1,6 +1,6 @@
 <template>
   <div class="transition-settings">
-    <h3>转场设置</h3>
+    <h3>默认转场设置</h3>
     <label>转场类型
       <select :value="type" @change="$emit('update:type', $event.target.value)">
         <option value="fade">淡入淡出</option>

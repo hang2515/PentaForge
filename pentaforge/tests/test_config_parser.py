@@ -1,6 +1,7 @@
 """Tests for config_parser module."""
 
 import os
+import json
 import tempfile
 import pytest
 
@@ -96,13 +97,14 @@ class TestLoadConfig:
         path = self.write_temp(cfg_yaml)
         try:
             config = load_config(path)
-            assert config.output == "highlight_output.mp4"
+            assert config.output == os.path.abspath(os.path.join(os.path.dirname(path), "highlight_output.mp4"))
             assert config.bgm_volume == 0.3
             assert config.sfx_volume == 0.8
             assert config.transitions.type == "fade"
             assert config.transitions.duration == 0.3
             assert config.export.resolution == "1920x1080"
             assert config.export.fps == 60
+            assert config.audio_enabled is False
         finally:
             os.unlink(path)
 
@@ -117,7 +119,7 @@ class TestLoadConfig:
         path = self.write_temp(cfg_yaml)
         try:
             config = load_config(path)
-            assert config.output == "custom.mp4"
+            assert config.output == os.path.abspath(os.path.join(os.path.dirname(path), "custom.mp4"))
             assert config.bgm_volume == 0.5
             assert config.transitions.type == "dissolve"
             assert config.transitions.duration == 0.5
@@ -170,3 +172,83 @@ class TestLoadConfig:
     def test_clip_duration_property(self):
         clip = ClipConfig(start=5.0, end=15.0)
         assert clip.duration == 10.0
+
+    def test_relative_paths_resolve_from_config_directory(self):
+        source = os.path.join(self.tmpdir, "relative_source.mp4")
+        open(source, "wb").close()
+        cfg_yaml = self.make_config(
+            source="relative_source.mp4",
+            output="out/highlight.mp4",
+            audio_enabled="false",
+        )
+        path = os.path.join(self.tmpdir, "relative.yaml")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(cfg_yaml)
+
+        config = load_config(path)
+
+        assert config.source == source
+        assert config.output == os.path.join(self.tmpdir, "out", "highlight.mp4")
+        assert config.audio_enabled is False
+
+    def test_audio_enabled_requires_bgm(self):
+        cfg_yaml = self.make_config(audio_enabled=True, bgm="")
+        path = self.write_temp(cfg_yaml)
+        try:
+            with pytest.raises(ValueError, match="BGM"):
+                load_config(path)
+        finally:
+            os.unlink(path)
+
+    def test_clip_transition_after(self):
+        cfg_yaml = self.make_config(
+            transitions={"type": "fade", "duration": 0.3},
+            clips=[
+                {
+                    "start": "0:00",
+                    "end": "0:10",
+                    "transition_after": {"type": "wipeleft", "duration": 0.5},
+                },
+                {"start": "0:20", "end": "0:30"},
+            ],
+        )
+        path = self.write_temp(cfg_yaml)
+        try:
+            config = load_config(path)
+            assert config.clips[0].transition_after.type == "wipeleft"
+            assert config.clips[0].transition_after.duration == 0.5
+            assert config.clips[1].transition_after is None
+        finally:
+            os.unlink(path)
+
+    def test_missing_sfx_file_raises_when_audio_enabled(self):
+        bgm = os.path.join(self.tmpdir, "bgm.wav")
+        open(bgm, "wb").close()
+        cfg_yaml = self.make_config(
+            audio_enabled=True,
+            bgm=bgm,
+            sfx={"triple_kill": os.path.join(self.tmpdir, "missing.wav")},
+        )
+        path = self.write_temp(cfg_yaml)
+        try:
+            with pytest.raises(FileNotFoundError, match="triple_kill"):
+                load_config(path)
+        finally:
+            os.unlink(path)
+
+    def test_json_config_is_supported(self):
+        path = os.path.join(self.tmpdir, "config.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "source": self.source,
+                    "audio_enabled": False,
+                    "clips": [{"start": "0:01", "end": "0:02"}],
+                },
+                f,
+            )
+
+        config = load_config(path)
+
+        assert len(config.clips) == 1
+        assert config.clips[0].start == 1.0

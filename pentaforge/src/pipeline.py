@@ -5,7 +5,7 @@ import tempfile
 import shutil
 from dataclasses import dataclass
 
-from .config_parser import PipelineConfig, ClipConfig
+from .config_parser import PipelineConfig, ClipConfig, TransitionConfig
 from .clip_extractor import extract_video
 from .audio_processor import mix_audio_for_clip, mux_video_audio
 from .clip_stitcher import stitch_clips
@@ -17,6 +17,13 @@ class PipelineResult:
     output_path: str
     errors: list[str]
     temp_dir: str
+
+
+def _clip_transitions(config: PipelineConfig) -> list[TransitionConfig]:
+    transitions: list[TransitionConfig] = []
+    for clip in config.clips[:-1]:
+        transitions.append(clip.transition_after or config.transitions)
+    return transitions
 
 
 def run_pipeline(config: PipelineConfig) -> PipelineResult:
@@ -82,6 +89,8 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             output=config.output,
             transition_type=config.transitions.type,
             transition_dur=config.transitions.duration,
+            transitions=_clip_transitions(config),
+            export=config.export,
         )
 
     except Exception as e:
@@ -164,6 +173,8 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
             output=config.output,
             transition_type=config.transitions.type,
             transition_dur=config.transitions.duration,
+            transitions=_clip_transitions(config),
+            export=config.export,
         )
 
     except Exception as e:

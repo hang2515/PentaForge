@@ -15,11 +15,11 @@
 
     <div v-if="mode === 'form'" class="form-panels">
       <AudioSettings
-        :bgm="store.bgm" :bgm-volume="store.bgmVolume"
-        :sfx-volume="store.sfxVolume" :audio-enabled="store.audio_enabled"
+        :bgm="store.bgm" :bgm-volume="store.bgm_volume"
+        :sfx-volume="store.sfx_volume" :audio-enabled="store.audio_enabled"
         @update:bgm="store.bgm = $event"
-        @update:bgm-volume="store.bgmVolume = $event"
-        @update:sfx-volume="store.sfxVolume = $event"
+        @update:bgm-volume="store.bgm_volume = $event"
+        @update:sfx-volume="store.sfx_volume = $event"
         @update:audio-enabled="store.audio_enabled = $event"
       />
       <TransitionSettings
