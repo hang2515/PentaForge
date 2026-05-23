@@ -1,5 +1,7 @@
 """Parse and validate highlight configuration files."""
 
+from __future__ import annotations
+
 import os
 import re
 from dataclasses import dataclass, field
@@ -16,6 +18,7 @@ class ClipConfig:
     label: str = ""
     sfx_offset: Optional[float] = None
     bgm: Optional[str] = None
+    source_index: int = 0
 
     @property
     def duration(self) -> float:
@@ -23,9 +26,19 @@ class ClipConfig:
 
 
 @dataclass
+class SourceConfig:
+    path: str
+    name: str = ""
+
+    def __post_init__(self):
+        if not self.name:
+            self.name = os.path.basename(self.path)
+
+
+@dataclass
 class TransitionConfig:
     type: str = "fade"
-    duration: float = 0.3
+    duration: float = 0.6
 
 
 @dataclass
@@ -39,9 +52,10 @@ class ExportConfig:
 
 @dataclass
 class PipelineConfig:
-    source: str
-    output: str
-    clips: list[ClipConfig]
+    source: str = ""  # kept for backward compat with old YAML
+    output: str = ""
+    clips: list[ClipConfig] = field(default_factory=list)
+    sources: list[SourceConfig] = field(default_factory=list)
     bgm: str = ""
     bgm_volume: float = 0.3
     sfx: dict[str, str] = field(default_factory=dict)
@@ -50,6 +64,13 @@ class PipelineConfig:
     transitions: TransitionConfig = field(default_factory=TransitionConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     temp_dir: str = ""
+
+    def source_for(self, clip: ClipConfig) -> str:
+        """Resolve the source file path for a clip, handling both old and new formats."""
+        idx = clip.source_index
+        if 0 <= idx < len(self.sources):
+            return self.sources[idx].path
+        return self.source  # fallback for single-source YAML
 
 
 _TIME_RE = re.compile(
@@ -91,9 +112,15 @@ def load_config(path: str) -> PipelineConfig:
     if raw is None:
         raise ValueError("Config file is empty")
 
-    source = raw.get("source", "")
-    if not source:
-        raise ValueError("Missing required field: source")
+    # Parse sources (new multi-source format) or fallback to single source
+    sources_raw = raw.get("sources", [])
+    if sources_raw:
+        sources = [SourceConfig(path=s.get("path", ""), name=s.get("name", "")) for s in sources_raw]
+    else:
+        source = raw.get("source", "")
+        if not source:
+            raise ValueError("Missing required field: source")
+        sources = [SourceConfig(path=source)]
 
     clips_raw = raw.get("clips", [])
     if not clips_raw:
@@ -113,6 +140,10 @@ def load_config(path: str) -> PipelineConfig:
         if sfx_offset is not None:
             sfx_offset = float(sfx_offset)
 
+        si = int(c.get("source_index", 0))
+        if si >= len(sources):
+            si = 0
+
         clips.append(ClipConfig(
             start=start,
             end=end,
@@ -120,12 +151,13 @@ def load_config(path: str) -> PipelineConfig:
             label=str(c.get("label", "")),
             sfx_offset=sfx_offset,
             bgm=c.get("bgm"),
+            source_index=si,
         ))
 
     transitions_raw = raw.get("transitions", {})
     transitions = TransitionConfig(
         type=transitions_raw.get("type", "fade"),
-        duration=float(transitions_raw.get("duration", 0.3)),
+        duration=float(transitions_raw.get("duration", 0.6)),
     )
 
     export_raw = raw.get("export", {})
@@ -138,7 +170,8 @@ def load_config(path: str) -> PipelineConfig:
     )
 
     config = PipelineConfig(
-        source=source,
+        source=sources[0].path if sources else "",
+        sources=sources,
         output=raw.get("output", "highlight_output.mp4"),
         clips=clips,
         bgm=raw.get("bgm", ""),
@@ -152,7 +185,8 @@ def load_config(path: str) -> PipelineConfig:
     )
 
     # Validate files exist
-    _validate_file(config.source, "Source video")
+    for src in sources:
+        _validate_file(src.path, "Source video")
     if config.bgm:
         _validate_file(config.bgm, "BGM file")
     for key, sfx_path in config.sfx.items():

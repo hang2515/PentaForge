@@ -1,111 +1,160 @@
 <template>
   <div class="clip-editor">
-    <h3>剪辑片段</h3>
-    <div v-for="(clip, i) in clips" :key="i" class="clip-card">
-      <div class="clip-header">
-        <span class="clip-label">{{ clip.label || clip.kill_type || `片段 ${i + 1}` }}</span>
-        <button v-if="clips.length > 1" class="btn-icon" @click="remove(i)" title="删除片段">x</button>
-      </div>
-      <div class="clip-row">
-        <label>开始 (秒)<input type="number" step="0.1" :value="clip.start" @input="setTime(i, 'start', $event)" /></label>
-        <label>结束 (秒)<input type="number" step="0.1" :value="clip.end" @input="setTime(i, 'end', $event)" /></label>
-        <label>时长<div class="dur">{{ (clip.end - clip.start).toFixed(1) }}s</div></label>
-      </div>
-      <div class="clip-row">
-        <label>击杀类型
-          <select :value="clip.kill_type" @change="setField(i, 'kill_type', $event.target.value)">
-            <option value="">无</option>
-            <option value="double_kill">双杀</option>
-            <option value="triple_kill">三杀</option>
-            <option value="quadra_kill">四杀</option>
-            <option value="penta_kill">五杀</option>
-          </select>
-        </label>
-        <label>标签<input :value="clip.label" @input="setField(i, 'label', $event.target.value)" placeholder="可选" /></label>
-      </div>
-      <div class="clip-row">
-        <label>SFX 偏移 (秒)<input type="number" step="0.1" :value="clip.sfx_offset ?? ''" @input="setField(i, 'sfx_offset', $event.target.value ? parseFloat($event.target.value) : null)" placeholder="自动" /></label>
-        <label>独立 BGM<input :value="clip.bgm" @input="setField(i, 'bgm', $event.target.value)" placeholder="使用全局BGM" /></label>
+    <div class="clip-header">
+      <span class="section-title" style="margin:0;padding:0;border:0">高光片段</span>
+      <span class="clip-count">{{ clips.length }} 个</span>
+    </div>
+    <div class="clip-list">
+      <div v-for="(clip, i) in clips" :key="i" class="clip-card">
+        <div class="clip-top">
+          <div class="clip-color" :style="{ background: colors[i % colors.length] }" />
+          <input
+            class="clip-label-input"
+            :value="clip.label"
+            @input="emitUpdate(i, 'label', $event.target.value)"
+            :placeholder="`片段 ${i + 1}`"
+          />
+          <button class="btn-icon" @click="$emit('removeClip', i)" v-if="clips.length > 1">&times;</button>
+        </div>
+        <div class="clip-times">
+          <label>开始
+            <input type="number" step="0.1" :value="clip.start" @input="emitUpdate(i, 'start', parseFloat($event.target.value) || 0)" />
+          </label>
+          <label>结束
+            <input type="number" step="0.1" :value="clip.end" @input="emitUpdate(i, 'end', parseFloat($event.target.value) || 0)" />
+          </label>
+          <label>时长
+            <span class="dur">{{ ((clip.end - clip.start)).toFixed(1) }}s</span>
+          </label>
+        </div>
+        <div class="clip-extra">
+          <label>类型
+            <select :value="clip.kill_type" @change="emitUpdate(i, 'kill_type', $event.target.value)">
+              <option value="">-- 无 --</option>
+              <option value="double_kill">双杀</option>
+              <option value="triple_kill">三杀</option>
+              <option value="quadra_kill">四杀</option>
+              <option value="penta_kill">五杀</option>
+            </select>
+          </label>
+          <label>特效偏移
+            <input type="number" step="0.1" :value="clip.sfx_offset ?? ''" @input="emitUpdate(i, 'sfx_offset', $event.target.value ? parseFloat($event.target.value) : null)" placeholder="自动" />
+          </label>
+        </div>
       </div>
     </div>
-    <button class="btn" @click="add">+ 添加片段</button>
+    <button class="btn btn-primary add-clip-btn" @click="$emit('addClip')">+ 添加片段</button>
   </div>
 </template>
 
 <script setup>
-const props = defineProps({ clips: Array })
-const emit = defineEmits(['update:clips'])
+const props = defineProps({
+  clips: { type: Array, default: () => [] },
+  sourceIndex: { type: Number, default: 0 },
+  colors: { type: Array, default: () => [] },
+})
+const emit = defineEmits(['update:clips', 'addClip', 'removeClip'])
 
-function updateClips(clips) { emit('update:clips', clips) }
-
-function add() {
-  const clips = [...props.clips, { start: 0, end: 5, kill_type: '', label: '', sfx_offset: null, bgm: '' }]
-  updateClips(clips)
-}
-
-function remove(i) {
-  const clips = props.clips.filter((_, j) => j !== i)
-  updateClips(clips)
-}
-
-function setTime(i, side, e) {
-  const v = parseFloat(e.target.value) || 0
-  const clips = props.clips.map((c, j) => j === i ? { ...c, [side]: v } : c)
-  updateClips(clips)
-}
-
-function setField(i, field, value) {
-  const clips = props.clips.map((c, j) => j === i ? { ...c, [field]: value } : c)
-  updateClips(clips)
+function emitUpdate(clipIndex, field, value) {
+  const clips = props.clips.map((c, j) => j === clipIndex ? { ...c, [field]: value } : { ...c })
+  emit('update:clips', clips)
 }
 </script>
 
 <style scoped>
-.clip-card {
-  background: #fff;
-  border: 1px solid #e8d5c4;
-  border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 8px;
+.clip-editor {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
 }
 .clip-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.clip-label { font-weight: 600; font-size: 13px; color: #5c3d2e; }
-.clip-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 4px;
+.clip-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
 }
-.clip-row label {
-  flex: 1;
-  font-size: 11px;
-  color: #8d6e63;
+.clip-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 10px;
 }
-.clip-row input, .clip-row select {
-  background: #fef9f4;
-  border: 1px solid #d4b896;
-  color: #4a3728;
-  padding: 4px 6px;
-  border-radius: 3px;
-  font-size: 12px;
-  width: 100%;
-  box-sizing: border-box;
+.clip-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px;
+  transition: border-color var(--transition);
 }
-.dur { color: #d4742b; font-size: 12px; margin-top: auto; }
-.btn { margin-top: 6px; }
-.btn-icon {
-  background: none;
+.clip-card:hover { border-color: var(--border-accent); }
+
+.clip-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.clip-color {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.clip-label-input {
+  flex: 1;
+  background: transparent;
   border: none;
-  color: #c0392b;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 3px 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.clip-label-input:focus {
+  border-bottom-color: var(--gold-dim);
+  box-shadow: none;
+}
+.clip-times {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.clip-times label {
+  flex: 1;
+  font-size: 10px;
+}
+.clip-times input {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.dur {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--gold);
+  font-weight: 500;
+}
+.clip-extra {
+  display: flex;
+  gap: 8px;
+}
+.clip-extra label {
+  flex: 1;
+  font-size: 10px;
+}
+.clip-extra select, .clip-extra input {
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.add-clip-btn {
+  width: 100%;
+  text-align: center;
 }
 </style>

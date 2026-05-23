@@ -1,5 +1,7 @@
 """Stitch multiple clips together with transitions."""
 
+from __future__ import annotations
+
 from . import _ffmpeg_init  # noqa: F401 — init bundled FFmpeg binary
 import os
 import tempfile
@@ -52,10 +54,19 @@ def _do_stitch(
     v_nodes = []
     a_nodes = []
 
+    # Detect resolution from first clip
+    first_info = ffmpeg.probe(clip_paths[0])
+    first_v = next(s for s in first_info.get("streams", []) if s.get("codec_type") == "video")
+    base_w = first_v["width"]
+    base_h = first_v["height"]
+
     for i, inp in enumerate(inputs):
         v = inp.video.filter("setpts", "PTS-STARTPTS")
         clip_fps = _fps(clip_paths[i])
         v = v.filter("fps", fps=clip_fps)
+        v = v.filter("scale", base_w, base_h, force_original_aspect_ratio="decrease")
+        v = v.filter("pad", base_w, base_h, "(ow-iw)/2", "(oh-ih)/2")
+        v = v.filter("format", pix_fmts="yuv420p")
         v_nodes.append(v)
         if has_audio:
             a = ad_inputs[i].audio.filter("asetpts", "PTS-STARTPTS")
@@ -89,17 +100,20 @@ def _do_stitch(
     if out_a is not None:
         stream = ffmpeg.output(
             out_v, out_a, output,
-            vcodec="libx264", crf=18, preset="veryfast",
+            vcodec="libx264", crf=18, preset="veryfast", pix_fmt="yuv420p", profile="main",
             acodec="aac",
         )
     else:
         stream = ffmpeg.output(
             out_v, output,
-            vcodec="libx264", crf=18, preset="veryfast",
+            vcodec="libx264", crf=18, preset="veryfast", pix_fmt="yuv420p", profile="main",
         )
     if overwrite:
         stream = stream.global_args("-y")
-    ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+    try:
+        ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+    except ffmpeg.Error as e:
+        raise RuntimeError(f"FFmpeg stitch error:\n{e.stderr.decode() if isinstance(e.stderr, bytes) else e.stderr}")
 
 
 def stitch_clips(
@@ -134,7 +148,11 @@ def stitch_clips(
             stream = ffmpeg.output(inp.video, output, vcodec="copy")
         if overwrite:
             stream = stream.global_args("-y")
-        ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+        try:
+            ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+        except ffmpeg.Error as e:
+            stderr = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)
+            raise RuntimeError(f"FFmpeg stitch error:\n{stderr}")
         return
 
     # For multi-clip xfade, all clips need an audio track for acrossfade.

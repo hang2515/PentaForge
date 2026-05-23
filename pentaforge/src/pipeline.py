@@ -1,5 +1,7 @@
 """Pipeline orchestrator: ties all modules together."""
 
+from __future__ import annotations
+
 import os
 import tempfile
 import shutil
@@ -48,13 +50,17 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             # Determine SFX path
             sfx_path = config.sfx.get(clip.kill_type, "") if clip.kill_type else ""
 
+            # Resolve source file for this clip (multi-source support)
+            source_path = config.source_for(clip)
+
             # Step 1: Extract video segment
             video_temp = os.path.join(temp_dir, f"video_{i:04d}.mp4")
-            keep_audio = not config.audio_enabled
-            extract_video(config.source, clip.start, clip.duration, video_temp, keep_audio=keep_audio)
+            has_audio_mix = config.audio_enabled and bool(bgm)
+            keep_audio = not has_audio_mix
+            extract_video(source_path, clip.start, clip.duration, video_temp, keep_audio=keep_audio)
 
-            # Step 2-3: Process audio only when enabled and BGM is configured
-            if config.audio_enabled and bgm:
+            # Step 2-3: Process audio only when audio_enabled and BGM is configured
+            if has_audio_mix:
                 audio_temp = os.path.join(temp_dir, f"audio_{i:04d}.m4a")
                 sfx_offset = clip.sfx_offset
                 if sfx_offset is None:
@@ -113,7 +119,12 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
 
     clip_files: list[str] = []
     total_clips = len(config.clips)
-    total_steps = total_clips * 3 + 1
+    # Each clip: 1 extract step, plus 2 audio steps if audio is enabled with BGM
+    total_steps = 1  # final stitch
+    for clip in config.clips:
+        bgm = clip.bgm if clip.bgm else config.bgm
+        has_audio_mix = config.audio_enabled and bool(bgm)
+        total_steps += 3 if has_audio_mix else 1
     step = 0
 
     try:
@@ -125,10 +136,12 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
             callback(step, total_steps, f"Extracting clip {i+1}/{total_clips}: {clip.label or clip.kill_type}")
 
             video_temp = os.path.join(temp_dir, f"video_{i:04d}.mp4")
-            keep_audio = not config.audio_enabled
-            extract_video(config.source, clip.start, clip.duration, video_temp, keep_audio=keep_audio)
+            has_audio_mix = config.audio_enabled and bool(bgm)
+            keep_audio = not has_audio_mix
+            source_path = config.source_for(clip)
+            extract_video(source_path, clip.start, clip.duration, video_temp, keep_audio=keep_audio)
 
-            if config.audio_enabled and bgm:
+            if has_audio_mix:
                 step += 1
                 callback(step, total_steps, f"Mixing audio for clip {i+1}/{total_clips}")
 

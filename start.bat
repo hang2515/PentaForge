@@ -13,7 +13,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo [1/2] 启动后端 (127.0.0.1:8000)...
-start "PentaForge Backend" ".venv\Scripts\python.exe" -m uvicorn src.server:app --app-dir pentaforge --host 127.0.0.1 --port 8000
+start "PentaForge Backend" ".venv\Scripts\python.exe" -m uvicorn src.server:app --app-dir pentaforge --host 127.0.0.1 --port 8000 --reload
 
 echo [2/2] 启动前端 (127.0.0.1:5173)...
 start "PentaForge Frontend" cmd /c "cd /d pentaforge\web && npm run dev -- --host 127.0.0.1"

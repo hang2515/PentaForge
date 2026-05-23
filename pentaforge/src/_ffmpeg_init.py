@@ -16,7 +16,11 @@ _original_probe = ffmpeg.probe
 def _patched_run(stream_spec, cmd=None, **kwargs):
     if cmd is None:
         cmd = _BINARY
-    return _original_run(stream_spec, cmd=cmd, **kwargs)
+    try:
+        return _original_run(stream_spec, cmd=cmd, **kwargs)
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode("utf-8", errors="replace") if isinstance(e.stderr, bytes) else str(e.stderr)
+        raise RuntimeError(f"FFmpeg error:\n{stderr}") from e
 
 
 def _patched_probe(filename, cmd=None, **kwargs):
@@ -51,9 +55,8 @@ def _probe_fallback(filename):
     result = subprocess.run(
         [_BINARY, "-i", filename],
         capture_output=True,
-        text=True,
     )
-    stderr = result.stderr or ""
+    stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
 
     duration = 0.0
     m = _DURATION_RE.search(stderr)

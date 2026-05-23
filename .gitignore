@@ -26,3 +26,4 @@ __pycache__/
 *.spec
 *.dist-info
 *.egg-info
+.playwright-mcp

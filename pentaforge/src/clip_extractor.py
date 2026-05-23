@@ -21,14 +21,20 @@ def extract_video(
     """
     os.makedirs(os.path.dirname(output) if os.path.dirname(output) else ".", exist_ok=True)
 
-    stream = ffmpeg.input(source, ss=start, t=duration)
-    out_kwargs = {"vcodec": "libx264", "crf": 18, "preset": "veryfast"}
-    if not keep_audio:
-        out_kwargs["an"] = None
-    stream = ffmpeg.output(stream.video, output, **out_kwargs)
+    inp = ffmpeg.input(source, ss=start, t=duration)
+    out_kwargs = {"vcodec": "libx264", "crf": 18, "preset": "veryfast", "pix_fmt": "yuv420p", "profile": "main"}
+    if keep_audio:
+        out_kwargs["acodec"] = "aac"
+        stream = ffmpeg.output(inp.video, inp.audio, output, **out_kwargs)
+    else:
+        stream = ffmpeg.output(inp.video, output, an=None, **out_kwargs)
     if overwrite:
         stream = stream.global_args("-y")
-    ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+    try:
+        ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
+    except ffmpeg.Error as e:
+        stderr = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)
+        raise RuntimeError(f"FFmpeg extract error:\n{stderr}")
 
 
 def extract_video_fast(

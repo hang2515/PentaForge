@@ -1,5 +1,7 @@
 """FastAPI server for PentaForge web configurator."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -17,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import _ffmpeg_init  # noqa — init bundled FFmpeg binary (patches ffmpeg.run/probe)
 import ffmpeg
-from .config_parser import PipelineConfig, ClipConfig, TransitionConfig, ExportConfig, load_config
+from .config_parser import PipelineConfig, ClipConfig, TransitionConfig, ExportConfig, SourceConfig, load_config
 from .pipeline import run_pipeline, run_pipeline_with_progress, PipelineResult
 
 # ── FastAPI app ────────────────────────────────────────────────────────
@@ -46,6 +48,14 @@ def _dictify(obj):
 
 def _config_from_dict(d: dict) -> PipelineConfig:
     """Build PipelineConfig from JSON dict."""
+    # Parse sources (new multi-source format) or fallback to single source
+    sources_raw = d.get("sources", [])
+    if sources_raw:
+        sources = [SourceConfig(path=s.get("path", ""), name=s.get("name", "")) for s in sources_raw]
+    else:
+        source = d.get("source", "")
+        sources = [SourceConfig(path=source)] if source else []
+
     clips = [
         ClipConfig(
             start=c["start"],
@@ -54,13 +64,14 @@ def _config_from_dict(d: dict) -> PipelineConfig:
             label=c.get("label", ""),
             sfx_offset=c.get("sfx_offset"),
             bgm=c.get("bgm"),
+            source_index=int(c.get("source_index", 0)),
         )
         for c in d.get("clips", [])
     ]
     t_raw = d.get("transitions", {})
     transitions = TransitionConfig(
         type=t_raw.get("type", "fade"),
-        duration=float(t_raw.get("duration", 0.3)),
+        duration=float(t_raw.get("duration", 0.6)),
     )
     e_raw = d.get("export", {})
     export = ExportConfig(
@@ -71,7 +82,8 @@ def _config_from_dict(d: dict) -> PipelineConfig:
         preset=e_raw.get("preset", "medium"),
     )
     return PipelineConfig(
-        source=d.get("source", ""),
+        source=sources[0].path if sources else (d.get("source", "")),
+        sources=sources,
         output=d.get("output", "highlight_output.mp4"),
         clips=clips,
         bgm=d.get("bgm", ""),
@@ -107,6 +119,26 @@ def open_file_dialog(body: dict = {}):
     path = filedialog.askopenfilename(
         title=body.get("title", "选择文件"),
         filetypes=[(t[0], t[1]) if isinstance(t, (list, tuple)) else t for t in filetypes],
+    )
+    root.destroy()
+    if not path:
+        return {"path": "", "cancelled": True}
+    return {"path": path, "cancelled": False}
+
+
+@app.post("/api/save-dialog")
+def open_save_dialog(body: dict = {}):
+    """Open native OS save dialog and return the chosen path."""
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    path = filedialog.asksaveasfilename(
+        title=body.get("title", "保存文件"),
+        defaultextension=".mp4",
+        filetypes=[("MP4 Video", "*.mp4"), ("All files", "*.*")],
+        initialfile=body.get("filename", "highlight_output.mp4"),
     )
     root.destroy()
     if not path:

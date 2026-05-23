@@ -58,6 +58,18 @@ export async function openFileDialog(title, filetypes) {
   return res.json()
 }
 
+export async function saveFileDialog(title, filename) {
+  const res = await fetch('/api/save-dialog', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, filename }),
+  })
+  if (!res.ok) {
+    throw new Error('Failed to open save dialog')
+  }
+  return res.json()
+}
+
 export function connectProgress(jobId, onMessage, onClose, onError) {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
   const ws = new WebSocket(`${protocol}://${location.host}/ws/progress/${jobId}`)
