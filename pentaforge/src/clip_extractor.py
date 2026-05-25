@@ -1,8 +1,16 @@
 """Extract video segments from source footage using FFmpeg."""
 
 from . import _ffmpeg_init  # noqa: F401 — init bundled FFmpeg binary
+import logging
 import os
 import ffmpeg
+
+log = logging.getLogger("pentaforge.extractor")
+
+
+def _has_audio(path: str) -> bool:
+    info = ffmpeg.probe(path)
+    return any(s.get("codec_type") == "audio" for s in info.get("streams", []))
 
 
 def extract_video(
@@ -23,7 +31,7 @@ def extract_video(
 
     inp = ffmpeg.input(source, ss=start, t=duration)
     out_kwargs = {"vcodec": "libx264", "crf": 18, "preset": "veryfast", "pix_fmt": "yuv420p", "profile": "main"}
-    if keep_audio:
+    if keep_audio and _has_audio(source):
         out_kwargs["acodec"] = "aac"
         stream = ffmpeg.output(inp.video, inp.audio, output, **out_kwargs)
     else:
@@ -31,6 +39,8 @@ def extract_video(
     if overwrite:
         stream = stream.global_args("-y")
     try:
+        cmd = ffmpeg.compile(stream, cmd="ffmpeg")
+        log.info(f"FFmpeg extract command: {' '.join(cmd)}")
         ffmpeg.run(stream, capture_stdout=True, capture_stderr=True)
     except ffmpeg.Error as e:
         stderr = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)

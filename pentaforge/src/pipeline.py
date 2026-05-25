@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 import shutil
 from dataclasses import dataclass
 
-from .config_parser import PipelineConfig, ClipConfig
+from .config_parser import PipelineConfig, ClipConfig, TransitionConfig
+
+log = logging.getLogger("pentaforge.pipeline")
 from .clip_extractor import extract_video
 from .audio_processor import mix_audio_for_clip, mux_video_audio
 from .clip_stitcher import stitch_clips
@@ -19,6 +22,13 @@ class PipelineResult:
     output_path: str
     errors: list[str]
     temp_dir: str
+
+
+def _clip_transitions(config: PipelineConfig) -> list[TransitionConfig]:
+    transitions: list[TransitionConfig] = []
+    for clip in config.clips[:-1]:
+        transitions.append(clip.transition_after or config.transitions)
+    return transitions
 
 
 def run_pipeline(config: PipelineConfig) -> PipelineResult:
@@ -88,6 +98,8 @@ def run_pipeline(config: PipelineConfig) -> PipelineResult:
             output=config.output,
             transition_type=config.transitions.type,
             transition_dur=config.transitions.duration,
+            transitions=_clip_transitions(config),
+            export=config.export,
         )
 
     except Exception as e:
@@ -128,6 +140,24 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
     step = 0
 
     try:
+        # Log source video info for diagnostics
+        from . import _ffmpeg_init  # noqa
+        import ffmpeg as _ff
+        for si, src in enumerate(config.sources):
+            if src.path and os.path.exists(src.path):
+                try:
+                    probe = _ff.probe(src.path)
+                    fmt = probe.get("format", {})
+                    v_stream = next((s for s in probe.get("streams", []) if s.get("codec_type") == "video"), {})
+                    log.info(f"Source[{si}]: {src.path} | duration={fmt.get('duration', '?')}s | "
+                             f"codec={v_stream.get('codec_name', '?')} | "
+                             f"size={v_stream.get('width', '?')}x{v_stream.get('height', '?')} | "
+                             f"pix_fmt={v_stream.get('pix_fmt', '?')} | fps={v_stream.get('r_frame_rate', '?')}")
+                except Exception as e:
+                    log.warning(f"Source[{si}] probe failed: {e}")
+            else:
+                log.warning(f"Source[{si}] not found: {src.path}")
+
         for i, clip in enumerate(config.clips):
             bgm = clip.bgm if clip.bgm else config.bgm
             sfx_path = config.sfx.get(clip.kill_type, "") if clip.kill_type else ""
@@ -139,7 +169,13 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
             has_audio_mix = config.audio_enabled and bool(bgm)
             keep_audio = not has_audio_mix
             source_path = config.source_for(clip)
+            log.info(f"Extract: source={source_path}, start={clip.start}, duration={clip.duration}, output={video_temp}, keep_audio={keep_audio}")
+            callback(step, total_steps, f"Extracting: {os.path.basename(source_path)} [{clip.start:.1f}s - {clip.end:.1f}s]")
             extract_video(source_path, clip.start, clip.duration, video_temp, keep_audio=keep_audio)
+            if os.path.exists(video_temp):
+                size_kb = os.path.getsize(video_temp) / 1024
+                log.info(f"Extracted clip {i+1}: {size_kb:.0f} KB")
+                callback(step, total_steps, f"Extracted clip {i+1}: {size_kb:.0f} KB")
 
             if has_audio_mix:
                 step += 1
@@ -177,6 +213,8 @@ def run_pipeline_with_progress(config: PipelineConfig, callback) -> PipelineResu
             output=config.output,
             transition_type=config.transitions.type,
             transition_dur=config.transitions.duration,
+            transitions=_clip_transitions(config),
+            export=config.export,
         )
 
     except Exception as e:

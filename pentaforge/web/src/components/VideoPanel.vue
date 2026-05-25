@@ -44,14 +44,16 @@ async function browseSource() {
       ['Video files', '*.mp4 *.avi *.mkv *.mov *.webm *.flv'],
       ['All files', '*.*'],
     ])
-    if (!result.cancelled && result.path) {
-      store.addSource(result.path)
-      // Fetch video info
-      try {
-        const info = await api.getVideoInfo(result.path)
-        store.setSourceInfo(result.path, info)
-      } catch (e) {
-        console.error('Failed to load video info:', e)
+    if (!result.cancelled) {
+      const paths = result.paths?.length ? result.paths : result.path ? [result.path] : []
+      for (const path of paths) {
+        store.addSource(path)
+        try {
+          const info = await api.getVideoInfo(path)
+          store.setSourceInfo(path, info)
+        } catch (e) {
+          console.error('Failed to load video info:', e)
+        }
       }
     }
   } catch (e) {

@@ -106,6 +106,7 @@ defineExpose({ seek })
   border-radius: var(--radius-lg);
   overflow: hidden;
   position: relative;
+  flex-shrink: 0;
 }
 .video-container {
   position: relative;

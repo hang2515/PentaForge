@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import threading
 import uuid
 from dataclasses import asdict, is_dataclass
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 from pathlib import Path
 from typing import Optional
 
@@ -19,11 +22,16 @@ from fastapi.staticfiles import StaticFiles
 
 from . import _ffmpeg_init  # noqa — init bundled FFmpeg binary (patches ffmpeg.run/probe)
 import ffmpeg
-from .config_parser import PipelineConfig, ClipConfig, TransitionConfig, ExportConfig, SourceConfig, load_config
+from .config_parser import PipelineConfig, ClipConfig, TransitionConfig, ExportConfig, SourceConfig, load_config, parse_time
+from .detector import Roi, TextObservation, detect_candidates_from_video, events_to_clip_configs, parse_kill_events
 from .pipeline import run_pipeline, run_pipeline_with_progress, PipelineResult
 
 # ── FastAPI app ────────────────────────────────────────────────────────
 app = FastAPI(title="PentaForge", version="1.0.0")
+
+# Workspace root: the directory from which the server was started
+WORKSPACE_ROOT = os.getcwd()
+YAML_DIR = os.path.join(os.environ.get("APPDATA", WORKSPACE_ROOT), "PentaForge", "configs")
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,23 +64,24 @@ def _config_from_dict(d: dict) -> PipelineConfig:
         source = d.get("source", "")
         sources = [SourceConfig(path=source)] if source else []
 
-    clips = [
-        ClipConfig(
-            start=c["start"],
-            end=c["end"],
-            kill_type=c.get("kill_type", ""),
-            label=c.get("label", ""),
-            sfx_offset=c.get("sfx_offset"),
-            bgm=c.get("bgm"),
-            source_index=int(c.get("source_index", 0)),
-        )
-        for c in d.get("clips", [])
-    ]
     t_raw = d.get("transitions", {})
     transitions = TransitionConfig(
         type=t_raw.get("type", "fade"),
         duration=float(t_raw.get("duration", 0.6)),
     )
+    clips = [
+        ClipConfig(
+            start=parse_time(c["start"]),
+            end=parse_time(c["end"]),
+            kill_type=c.get("kill_type", ""),
+            label=c.get("label", ""),
+            sfx_offset=c.get("sfx_offset"),
+            bgm=c.get("bgm"),
+            source_index=int(c.get("source_index", 0)),
+            transition_after=_transition_from_dict(c.get("transition_after"), transitions) if "transition_after" in c else None,
+        )
+        for c in d.get("clips", [])
+    ]
     e_raw = d.get("export", {})
     export = ExportConfig(
         resolution=e_raw.get("resolution", "1920x1080"),
@@ -90,11 +99,33 @@ def _config_from_dict(d: dict) -> PipelineConfig:
         bgm_volume=float(d.get("bgm_volume", 0.3)),
         sfx=d.get("sfx", {}),
         sfx_volume=float(d.get("sfx_volume", 0.8)),
-        audio_enabled=bool(d.get("audio_enabled", True)),
+        audio_enabled=_parse_bool(d.get("audio_enabled"), False),
         transitions=transitions,
         export=export,
         temp_dir=d.get("temp_dir", ""),
     )
+
+
+def _transition_from_dict(raw, default):
+    if raw is None:
+        return TransitionConfig(type=default.type, duration=default.duration)
+    return TransitionConfig(
+        type=raw.get("type", default.type),
+        duration=float(raw.get("duration", default.duration)),
+    )
+
+
+def _parse_bool(raw, default=False):
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    value = str(raw).strip().lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean value: {raw!r}")
 
 
 # ── job state ───────────────────────────────────────────────────────────
@@ -113,17 +144,25 @@ def open_file_dialog(body: dict = {}):
         filetypes = [("Video files", "*.mp4 *.avi *.mkv *.mov *.webm *.flv"),
                      ("Audio files", "*.mp3 *.wav *.m4a *.aac *.ogg *.flac"),
                      ("All files", "*.*")]
+    initialdir = body.get("initialdir", "")
+    if initialdir:
+        initialdir = os.path.normpath(initialdir)
+        if not os.path.isdir(initialdir):
+            os.makedirs(initialdir, exist_ok=True)
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-    path = filedialog.askopenfilename(
-        title=body.get("title", "选择文件"),
-        filetypes=[(t[0], t[1]) if isinstance(t, (list, tuple)) else t for t in filetypes],
-    )
+    kwargs = {
+        "title": body.get("title", "选择文件"),
+        "filetypes": [(t[0], t[1]) if isinstance(t, (list, tuple)) else t for t in filetypes],
+    }
+    if initialdir:
+        kwargs["initialdir"] = initialdir
+    paths = filedialog.askopenfilenames(**kwargs)
     root.destroy()
-    if not path:
-        return {"path": "", "cancelled": True}
-    return {"path": path, "cancelled": False}
+    if not paths:
+        return {"paths": [], "cancelled": True}
+    return {"paths": list(paths), "cancelled": False}
 
 
 @app.post("/api/save-dialog")
@@ -131,15 +170,23 @@ def open_save_dialog(body: dict = {}):
     """Open native OS save dialog and return the chosen path."""
     import tkinter as tk
     from tkinter import filedialog
+    initialdir = body.get("initialdir", "")
+    if initialdir:
+        initialdir = os.path.normpath(initialdir)
+        if not os.path.isdir(initialdir):
+            os.makedirs(initialdir, exist_ok=True)
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
-    path = filedialog.asksaveasfilename(
-        title=body.get("title", "保存文件"),
-        defaultextension=".mp4",
-        filetypes=[("MP4 Video", "*.mp4"), ("All files", "*.*")],
-        initialfile=body.get("filename", "highlight_output.mp4"),
-    )
+    kwargs = {
+        "title": body.get("title", "保存文件"),
+        "defaultextension": body.get("defaultextension", ".mp4"),
+        "filetypes": body.get("filetypes", [("MP4 Video", "*.mp4"), ("All files", "*.*")]),
+        "initialfile": body.get("filename", "highlight_output.mp4"),
+    }
+    if initialdir:
+        kwargs["initialdir"] = initialdir
+    path = filedialog.asksaveasfilename(**kwargs)
     root.destroy()
     if not path:
         return {"path": "", "cancelled": True}
@@ -151,6 +198,11 @@ def open_save_dialog(body: dict = {}):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/workspace")
+def workspace_info():
+    return {"root": WORKSPACE_ROOT, "yaml_dir": YAML_DIR}
 
 
 @app.get("/api/video/info")
@@ -212,17 +264,116 @@ def config_parse(body: dict):
 
 @app.post("/api/config/save")
 def config_save(body: dict):
-    config_dict = body.get("config", body)
     output_path = body.get("output_path", "")
     if not output_path:
         raise HTTPException(status_code=400, detail="Missing output_path")
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else ".", exist_ok=True)
     try:
+        yaml_text = body.get("yaml_text", "")
+        if yaml_text:
+            content = yaml_text
+        else:
+            config_dict = body.get("config", body)
+            content = yaml.dump(config_dict, allow_unicode=True, default_flow_style=False, sort_keys=False)
         with open(output_path, "w", encoding="utf-8") as f:
-            yaml.dump(config_dict, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+            f.write(content)
         return {"saved_path": output_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/config/load")
+def config_load(path: str = Query(...)):
+    if not path:
+        raise HTTPException(status_code=400, detail="Missing path")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Config file not found")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return {"yaml_text": f.read()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/detector/candidates")
+def detector_candidates(body: dict):
+    """Generate editable clip candidates from recognized text observations."""
+    observations_raw = body.get("observations", [])
+    if not isinstance(observations_raw, list):
+        raise HTTPException(status_code=400, detail="observations must be a list")
+
+    try:
+        observations = [
+            TextObservation(
+                time=parse_time(item["time"]),
+                text=str(item["text"]),
+                confidence=float(item.get("confidence", 1.0)),
+                source=str(item.get("source", "manual")),
+            )
+            for item in observations_raw
+        ]
+        events = parse_kill_events(
+            observations,
+            min_confidence=float(body.get("min_confidence", 0.0)),
+            dedupe_window=float(body.get("dedupe_window", 1.5)),
+        )
+        clips = events_to_clip_configs(
+            events,
+            pre_roll=float(body.get("pre_roll", 8.0)),
+            post_roll=float(body.get("post_roll", 4.0)),
+            merge_gap=float(body.get("merge_gap", 2.0)),
+            video_duration=body.get("video_duration"),
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=f"Observation missing field: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "events": [_dictify(event) for event in events],
+        "clips": [_dictify(clip) for clip in clips],
+    }
+
+
+@app.post("/api/detector/video")
+def detector_video(body: dict):
+    """Run PaddleOCR over sampled video frames and return editable candidates."""
+    source = body.get("source", "")
+    if not source:
+        raise HTTPException(status_code=400, detail="Missing source video path")
+
+    roi_raw = body.get("roi") or {}
+    roi = Roi(
+        x=float(roi_raw.get("x", 0.2)),
+        y=float(roi_raw.get("y", 0.06)),
+        width=float(roi_raw.get("width", 0.6)),
+        height=float(roi_raw.get("height", 0.24)),
+    )
+
+    try:
+        result = detect_candidates_from_video(
+            source,
+            roi=roi,
+            interval=float(body.get("interval", 0.5)),
+            pre_roll=float(body.get("pre_roll", 8.0)),
+            post_roll=float(body.get("post_roll", 4.0)),
+            merge_gap=float(body.get("merge_gap", 2.0)),
+            min_confidence=float(body.get("min_confidence", 0.0)),
+            dedupe_window=float(body.get("dedupe_window", 1.5)),
+            max_frames=body.get("max_frames"),
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {
+        "observations": [_dictify(obs) for obs in result.observations],
+        "events": [_dictify(event) for event in result.events],
+        "clips": [_dictify(clip) for clip in result.clips],
+    }
 
 
 @app.post("/api/pipeline/run")

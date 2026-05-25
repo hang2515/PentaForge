@@ -33,6 +33,28 @@ export async function saveConfig(config, outputPath) {
   return res.json()
 }
 
+export async function saveConfigYaml(yamlText, outputPath) {
+  const res = await fetch('/api/config/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ yaml_text: yamlText, output_path: outputPath }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to save config')
+  }
+  return res.json()
+}
+
+export async function loadConfig(path) {
+  const res = await fetch(`/api/config/load?path=${encodeURIComponent(path)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to load config')
+  }
+  return res.json()
+}
+
 export async function runPipeline(config) {
   const res = await fetch('/api/pipeline/run', {
     method: 'POST',
@@ -46,11 +68,37 @@ export async function runPipeline(config) {
   return res.json()
 }
 
-export async function openFileDialog(title, filetypes) {
+export async function detectCandidateClips(payload) {
+  const res = await fetch('/api/detector/candidates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to generate detector candidates')
+  }
+  return res.json()
+}
+
+export async function detectVideoClips(payload) {
+  const res = await fetch('/api/detector/video', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to run video OCR detection')
+  }
+  return res.json()
+}
+
+export async function openFileDialog(title, filetypes, initialdir) {
   const res = await fetch('/api/file-dialog', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, filetypes }),
+    body: JSON.stringify({ title, filetypes, initialdir }),
   })
   if (!res.ok) {
     throw new Error('Failed to open file dialog')
@@ -58,14 +106,22 @@ export async function openFileDialog(title, filetypes) {
   return res.json()
 }
 
-export async function saveFileDialog(title, filename) {
+export async function saveFileDialog(title, filename, initialdir, filetypes, defaultextension) {
   const res = await fetch('/api/save-dialog', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, filename }),
+    body: JSON.stringify({ title, filename, initialdir, filetypes, defaultextension }),
   })
   if (!res.ok) {
     throw new Error('Failed to open save dialog')
+  }
+  return res.json()
+}
+
+export async function getWorkspace() {
+  const res = await fetch('/api/workspace')
+  if (!res.ok) {
+    throw new Error('Failed to get workspace info')
   }
   return res.json()
 }

@@ -5,23 +5,25 @@
       <span class="clip-count">{{ clips.length }} 个</span>
     </div>
     <div class="clip-list">
-      <div v-for="(clip, i) in clips" :key="i" class="clip-card">
+      <div v-for="(clip, i) in clips" :key="`${clip.sourceIndex}-${i}`" class="clip-card">
+        <div class="clip-source" v-if="sources.length > 1">
+          <span class="source-tag">{{ sources[clip.sourceIndex]?.name || `源 ${clip.sourceIndex + 1}` }}</span>
+        </div>
         <div class="clip-top">
           <div class="clip-color" :style="{ background: colors[i % colors.length] }" />
           <input
             class="clip-label-input"
             :value="clip.label"
-            @input="emitUpdate(i, 'label', $event.target.value)"
+            @input="emitUpdate(clip.sourceIndex, getLocalIndex(clip.sourceIndex, i), 'label', $event.target.value)"
             :placeholder="`片段 ${i + 1}`"
           />
-          <button class="btn-icon" @click="$emit('removeClip', i)" v-if="clips.length > 1">&times;</button>
         </div>
         <div class="clip-times">
           <label>开始
-            <input type="number" step="0.1" :value="clip.start" @input="emitUpdate(i, 'start', parseFloat($event.target.value) || 0)" />
+            <input type="number" step="0.1" :value="clip.start" @input="emitUpdate(clip.sourceIndex, getLocalIndex(clip.sourceIndex, i), 'start', parseFloat($event.target.value) || 0)" />
           </label>
           <label>结束
-            <input type="number" step="0.1" :value="clip.end" @input="emitUpdate(i, 'end', parseFloat($event.target.value) || 0)" />
+            <input type="number" step="0.1" :value="clip.end" @input="emitUpdate(clip.sourceIndex, getLocalIndex(clip.sourceIndex, i), 'end', parseFloat($event.target.value) || 0)" />
           </label>
           <label>时长
             <span class="dur">{{ ((clip.end - clip.start)).toFixed(1) }}s</span>
@@ -29,7 +31,7 @@
         </div>
         <div class="clip-extra">
           <label>类型
-            <select :value="clip.kill_type" @change="emitUpdate(i, 'kill_type', $event.target.value)">
+            <select :value="clip.kill_type" @change="emitUpdate(clip.sourceIndex, getLocalIndex(clip.sourceIndex, i), 'kill_type', $event.target.value)">
               <option value="">-- 无 --</option>
               <option value="double_kill">双杀</option>
               <option value="triple_kill">三杀</option>
@@ -38,7 +40,31 @@
             </select>
           </label>
           <label>特效偏移
-            <input type="number" step="0.1" :value="clip.sfx_offset ?? ''" @input="emitUpdate(i, 'sfx_offset', $event.target.value ? parseFloat($event.target.value) : null)" placeholder="自动" />
+            <input type="number" step="0.1" :value="clip.sfx_offset ?? ''" @input="emitUpdate(clip.sourceIndex, getLocalIndex(clip.sourceIndex, i), 'sfx_offset', $event.target.value ? parseFloat($event.target.value) : null)" placeholder="自动" />
+          </label>
+        </div>
+      </div>
+      <div v-if="i < clips.length - 1" class="transition-row">
+        <div class="transition-title">到下一段的转场</div>
+        <div class="clip-row">
+          <label>类型
+            <select :value="transitionFor(clip).type" @change="setTransitionField(clip, 'type', $event.target.value)">
+              <option value="fade">淡入淡出</option>
+              <option value="fadeblack">淡黑</option>
+              <option value="fadewhite">淡白</option>
+              <option value="dissolve">溶解</option>
+              <option value="wipeleft">向左擦除</option>
+              <option value="wiperight">向右擦除</option>
+              <option value="wipeup">向上擦除</option>
+              <option value="wipedown">向下擦除</option>
+              <option value="slideleft">向左滑动</option>
+              <option value="slideright">向右滑动</option>
+              <option value="circleopen">圆形打开</option>
+              <option value="circleclose">圆形关闭</option>
+            </select>
+          </label>
+          <label>持续时间 (秒)
+            <input type="number" step="0.1" min="0" :value="transitionFor(clip).duration" @input="setTransitionField(clip, 'duration', parseFloat($event.target.value) || 0)" />
           </label>
         </div>
       </div>
@@ -50,14 +76,34 @@
 <script setup>
 const props = defineProps({
   clips: { type: Array, default: () => [] },
-  sourceIndex: { type: Number, default: 0 },
+  sources: { type: Array, default: () => [] },
   colors: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['update:clips', 'addClip', 'removeClip'])
+const emit = defineEmits(['updateClip', 'addClip', 'removeClip'])
 
-function emitUpdate(clipIndex, field, value) {
-  const clips = props.clips.map((c, j) => j === clipIndex ? { ...c, [field]: value } : { ...c })
-  emit('update:clips', clips)
+// Get local clip index within a source, given the global flat index
+function getLocalIndex(sourceIndex, globalIndex) {
+  let count = 0
+  for (let i = 0; i < globalIndex; i++) {
+    if (props.clips[i].sourceIndex === sourceIndex) count++
+  }
+  return count
+}
+
+function emitUpdate(sourceIndex, clipIndex, field, value) {
+  emit('updateClip', sourceIndex, clipIndex, { [field]: value })
+}
+
+function transitionFor(clip) {
+  return clip.transition_after || { type: 'fade', duration: 0.3 }
+}
+
+function setTransitionField(clip, field, value) {
+  const current = transitionFor(clip)
+  const localIdx = getLocalIndex(clip.sourceIndex, props.clips.indexOf(clip))
+  emit('updateClip', clip.sourceIndex, localIdx, {
+    transition_after: { ...current, [field]: value },
+  })
 }
 </script>
 
@@ -83,8 +129,6 @@ function emitUpdate(clipIndex, field, value) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: 320px;
-  overflow-y: auto;
   margin-bottom: 10px;
 }
 .clip-card {
@@ -95,6 +139,18 @@ function emitUpdate(clipIndex, field, value) {
   transition: border-color var(--transition);
 }
 .clip-card:hover { border-color: var(--border-accent); }
+
+.clip-source {
+  margin-bottom: 4px;
+}
+.source-tag {
+  font-size: 10px;
+  color: var(--gold-dim);
+  background: var(--gold-glow);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 500;
+}
 
 .clip-top {
   display: flex;
@@ -110,6 +166,20 @@ function emitUpdate(clipIndex, field, value) {
 .clip-label-input {
   flex: 1;
   background: transparent;
+}
+.transition-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.transition-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.btn-icon {
+  background: none;
   border: none;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);

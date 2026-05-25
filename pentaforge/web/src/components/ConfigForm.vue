@@ -24,47 +24,87 @@
       <ExportSettings />
     </details>
 
+    <div class="config-save">
+      <label>配置文件名
+        <div class="save-row">
+          <input v-model="filename" placeholder="pentaforge_config.yaml" />
+          <button class="btn" @click="saveYaml">保存</button>
+        </div>
+      </label>
+    </div>
     <div class="actions">
-      <button class="btn" @click="saveYaml">保存配置</button>
       <button class="btn" @click="loadYamlPrompt">加载配置</button>
     </div>
+    <div v-if="status" class="status" :class="{ error: status.includes('失败') }">{{ status }}</div>
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useConfigStore } from '../stores/config.js'
+import * as api from '../api/client.js'
 import AudioSettings from './AudioSettings.vue'
 import TransitionSettings from './TransitionSettings.vue'
 import ExportSettings from './ExportSettings.vue'
 
 const store = useConfigStore()
+const status = ref('')
+const filename = ref('')
 
-async function saveYaml() {
-  const text = store.yamlText
-  const blob = new Blob([text], { type: 'text/yaml' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'pentaforge_config.yaml'
-  a.click()
-  URL.revokeObjectURL(url)
+const YAML_FILETYPES = [['YAML files', '*.yaml *.yml'], ['All files', '*.*']]
+
+// Update default filename when source changes
+import { watch } from 'vue'
+watch(() => store.activeSource?.name, (name) => {
+  if (name && !filename.value) {
+    filename.value = name.replace(/\.[^\\/]+$/, '.yaml')
+  }
+}, { immediate: true })
+
+async function getConfigDir() {
+  try {
+    const ws = await api.getWorkspace()
+    return ws.yaml_dir
+  } catch {
+    return ''
+  }
 }
 
-function loadYamlPrompt() {
-  const input = document.createElement('input')
-  input.type = 'file'
-  input.accept = '.yaml,.yml'
-  input.onchange = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const text = await file.text()
-    try {
-      store.loadFromYaml(text)
-    } catch (err) {
-      console.error('YAML load error:', err)
-    }
+async function saveYaml() {
+  status.value = ''
+  const configDir = await getConfigDir()
+  const name = filename.value || 'pentaforge_config.yaml'
+  if (!name.endsWith('.yaml') && !name.endsWith('.yml')) {
+    filename.value = name + '.yaml'
   }
-  input.click()
+  const outputPath = configDir ? `${configDir}/${filename.value}` : filename.value
+
+  try {
+    const result = await api.saveConfigYaml(store.yamlText, outputPath)
+    status.value = `已保存: ${result.saved_path}`
+  } catch (err) {
+    status.value = `保存失败: ${err.message}`
+  }
+}
+
+async function loadYamlPrompt() {
+  status.value = ''
+  const configDir = await getConfigDir()
+
+  try {
+    const result = await api.openFileDialog('选择配置文件', YAML_FILETYPES, configDir)
+    if (result.cancelled) return
+    const paths = result.paths?.length ? result.paths : result.path ? [result.path] : []
+    if (!paths.length) return
+    const loadResult = await api.loadConfig(paths[0])
+    store.loadFromYaml(loadResult.yaml_text)
+    // Update filename to the loaded file's name
+    const loadedName = paths[0].split(/[/\\]/).pop()
+    if (loadedName) filename.value = loadedName
+    status.value = '配置已加载'
+  } catch (err) {
+    status.value = `加载失败: ${err.message}`
+  }
 }
 </script>
 
@@ -113,6 +153,21 @@ function loadYamlPrompt() {
   padding: 0 14px 12px;
 }
 
+.config-save {
+  margin-top: 8px;
+}
+.save-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.save-row input {
+  flex: 1;
+  min-width: 0;
+}
+.save-row .btn {
+  flex-shrink: 0;
+}
 .actions {
   display: flex;
   gap: 6px;
@@ -121,5 +176,14 @@ function loadYamlPrompt() {
 .actions .btn {
   flex: 1;
   text-align: center;
+}
+.status {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--accent-green);
+  word-break: break-all;
+}
+.status.error {
+  color: var(--accent-red);
 }
 </style>

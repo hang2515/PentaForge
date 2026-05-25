@@ -21,10 +21,9 @@ const CLIP_COLORS = [
 ]
 
 function emptyClip(sourceIdx = 0, videoDuration = 0) {
-  // Default clip to the middle portion of the video, or first 5s for short videos
   const dur = Math.min(5, videoDuration > 0 ? videoDuration / 6 : 5)
   const start = videoDuration > 0 ? Math.max(0, (videoDuration - dur) / 2) : 0
-  return { start, end: start + dur, kill_type: '', label: '', sfx_offset: null, bgm: '', sourceIndex: sourceIdx }
+  return { start, end: start + dur, kill_type: '', label: '', sfx_offset: null, bgm: '', sourceIndex: sourceIdx, transition_after: null }
 }
 
 function emptySource(path = '') {
@@ -104,6 +103,7 @@ export const useConfigStore = defineStore('config', {
           label: c.label || undefined,
           sfx_offset: c.sfx_offset != null ? c.sfx_offset : undefined,
           bgm: c.bgm || undefined,
+          transition_after: c.transition_after || undefined,
         })),
         temp_dir: this.temp_dir || undefined,
       }
@@ -221,6 +221,7 @@ export const useConfigStore = defineStore('config', {
             label: c.label || '',
             sfx_offset: c.sfx_offset ?? null,
             bgm: c.bgm || '',
+            transition_after: c.transition_after ? { ...defaultTransitions, ...c.transition_after } : null,
           })
         }
         for (const [si, clips] of Object.entries(clipsBySource)) {

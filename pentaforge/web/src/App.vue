@@ -36,15 +36,16 @@
             @update:clips="clips => store.setAllClips(store.activeSourceIndex, clips)"
             @seek="seekVideo"
           />
+          <DetectionPanel />
         </div>
         <div class="workspace-right">
           <ClipEditor
-            :clips="store.activeClips"
-            :sourceIndex="store.activeSourceIndex"
+            :clips="store.allClips"
+            :sources="store.sources"
             :colors="store.clipColors"
-            @update:clips="clips => store.setAllClips(store.activeSourceIndex, clips)"
+            @update-clip="(si, ci, updates) => store.updateClip(si, ci, updates)"
             @add-clip="store.addClip(store.activeSourceIndex)"
-            @remove-clip="(ci) => store.removeClip(store.activeSourceIndex, ci)"
+            @remove-clip="(si, ci) => store.removeClip(si, ci)"
           />
         </div>
       </section>
@@ -62,6 +63,7 @@ import VideoPreview from './components/VideoPreview.vue'
 import TimelineScrubber from './components/TimelineScrubber.vue'
 import ClipEditor from './components/ClipEditor.vue'
 import ConfigForm from './components/ConfigForm.vue'
+import DetectionPanel from './components/DetectionPanel.vue'
 import PipelineRunner from './components/PipelineRunner.vue'
 import ProgressOverlay from './components/ProgressOverlay.vue'
 
@@ -306,7 +308,7 @@ input[type="checkbox"] {
 .workspace {
   display: flex;
   gap: 12px;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 16px;
 }
 .workspace-left {
@@ -315,6 +317,7 @@ input[type="checkbox"] {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  overflow-y: auto;
 }
 .workspace-right {
   width: 320px;

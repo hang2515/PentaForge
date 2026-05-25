@@ -6,3 +6,5 @@ uvicorn[standard]>=0.34.0
 websockets>=14.0
 python-multipart>=0.0.20
 aiofiles>=24.0.0
+paddlepaddle>=3.0.0
+paddleocr>=3.0.0

@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import yaml
+
+
+@dataclass
+class TransitionConfig:
+    type: str = "fade"
+    duration: float = 0.3
 
 
 @dataclass
@@ -19,6 +26,7 @@ class ClipConfig:
     sfx_offset: Optional[float] = None
     bgm: Optional[str] = None
     source_index: int = 0
+    transition_after: Optional[TransitionConfig] = None
 
     @property
     def duration(self) -> float:
@@ -33,12 +41,6 @@ class SourceConfig:
     def __post_init__(self):
         if not self.name:
             self.name = os.path.basename(self.path)
-
-
-@dataclass
-class TransitionConfig:
-    type: str = "fade"
-    duration: float = 0.6
 
 
 @dataclass
@@ -60,7 +62,7 @@ class PipelineConfig:
     bgm_volume: float = 0.3
     sfx: dict[str, str] = field(default_factory=dict)
     sfx_volume: float = 0.8
-    audio_enabled: bool = True
+    audio_enabled: bool = False
     transitions: TransitionConfig = field(default_factory=TransitionConfig)
     export: ExportConfig = field(default_factory=ExportConfig)
     temp_dir: str = ""
@@ -73,9 +75,6 @@ class PipelineConfig:
         return self.source  # fallback for single-source YAML
 
 
-_TIME_RE = re.compile(
-    r"^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)$"
-)
 _TIME_COLON = re.compile(r"^(\d+):(\d+):(\d+(?:\.\d+)?)$")
 
 
@@ -104,13 +103,59 @@ def _validate_file(path: str, label: str):
         raise FileNotFoundError(f"{label} not found: {path}")
 
 
-def load_config(path: str) -> PipelineConfig:
-    """Load and validate a YAML configuration file."""
-    with open(path, "r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+def _resolve_path(base_dir: str, path: str) -> str:
+    if not path:
+        return path
+    if os.path.isabs(path):
+        return path
+    return os.path.abspath(os.path.join(base_dir, path))
 
+
+def _parse_bool(raw: Any, default: bool = False) -> bool:
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, (int, float)):
+        return bool(raw)
+    value = str(raw).strip().lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    raise ValueError(f"Invalid boolean value: {raw!r}")
+
+
+def _load_raw_config(path: str) -> dict:
+    with open(path, "r", encoding="utf-8") as f:
+        if path.lower().endswith(".json"):
+            raw = json.load(f)
+        else:
+            raw = yaml.safe_load(f)
     if raw is None:
         raise ValueError("Config file is empty")
+    if not isinstance(raw, dict):
+        raise ValueError("Config file must contain an object")
+    return raw
+
+
+def _parse_transition(raw: Any, default: TransitionConfig | None = None) -> TransitionConfig:
+    default = default or TransitionConfig()
+    if raw is None:
+        return TransitionConfig(type=default.type, duration=default.duration)
+    if not isinstance(raw, dict):
+        raise ValueError("Transition config must be an object")
+    return TransitionConfig(
+        type=str(raw.get("type", default.type)),
+        duration=float(raw.get("duration", default.duration)),
+    )
+
+
+def load_config(path: str) -> PipelineConfig:
+    """Load and validate a YAML or JSON configuration file."""
+    config_path = os.path.abspath(path)
+    base_dir = os.path.dirname(config_path)
+    raw = _load_raw_config(config_path)
 
     # Parse sources (new multi-source format) or fallback to single source
     sources_raw = raw.get("sources", [])
@@ -125,6 +170,9 @@ def load_config(path: str) -> PipelineConfig:
     clips_raw = raw.get("clips", [])
     if not clips_raw:
         raise ValueError("No clips defined in config")
+
+    transitions_raw = raw.get("transitions", {})
+    transitions = _parse_transition(transitions_raw)
 
     clips = []
     for i, c in enumerate(clips_raw):
@@ -143,6 +191,9 @@ def load_config(path: str) -> PipelineConfig:
         si = int(c.get("source_index", 0))
         if si >= len(sources):
             si = 0
+        transition_after = None
+        if "transition_after" in c:
+            transition_after = _parse_transition(c.get("transition_after"), transitions)
 
         clips.append(ClipConfig(
             start=start,
@@ -150,16 +201,10 @@ def load_config(path: str) -> PipelineConfig:
             kill_type=str(c.get("kill_type", "")),
             label=str(c.get("label", "")),
             sfx_offset=sfx_offset,
-            bgm=c.get("bgm"),
+            bgm=_resolve_path(base_dir, c.get("bgm", "")) or None,
             source_index=si,
+            transition_after=transition_after,
         ))
-
-    transitions_raw = raw.get("transitions", {})
-    transitions = TransitionConfig(
-        type=transitions_raw.get("type", "fade"),
-        duration=float(transitions_raw.get("duration", 0.6)),
-    )
-
     export_raw = raw.get("export", {})
     export = ExportConfig(
         resolution=export_raw.get("resolution", "1920x1080"),
@@ -169,29 +214,36 @@ def load_config(path: str) -> PipelineConfig:
         preset=export_raw.get("preset", "medium"),
     )
 
+    sfx = {
+        str(key): _resolve_path(base_dir, value)
+        for key, value in raw.get("sfx", {}).items()
+        if value
+    }
+
     config = PipelineConfig(
         source=sources[0].path if sources else "",
         sources=sources,
-        output=raw.get("output", "highlight_output.mp4"),
+        output=_resolve_path(base_dir, raw.get("output", "highlight_output.mp4")),
         clips=clips,
-        bgm=raw.get("bgm", ""),
+        bgm=_resolve_path(base_dir, raw.get("bgm", "")),
         bgm_volume=float(raw.get("bgm_volume", 0.3)),
-        sfx=raw.get("sfx", {}),
+        sfx=sfx,
         sfx_volume=float(raw.get("sfx_volume", 0.8)),
-        audio_enabled=bool(raw.get("audio_enabled", True)),
+        audio_enabled=_parse_bool(raw.get("audio_enabled"), False),
         transitions=transitions,
         export=export,
-        temp_dir=raw.get("temp_dir", ""),
+        temp_dir=_resolve_path(base_dir, raw.get("temp_dir", "")),
     )
 
     # Validate files exist
     for src in sources:
         _validate_file(src.path, "Source video")
-    if config.bgm:
+    if config.audio_enabled and not config.bgm:
+        raise ValueError("audio_enabled is true, but no BGM file is configured")
+    if config.audio_enabled and config.bgm:
         _validate_file(config.bgm, "BGM file")
-    for key, sfx_path in config.sfx.items():
-        if sfx_path and not os.path.exists(sfx_path):
-            import warnings
-            warnings.warn(f"SFX '{key}' file not found: {sfx_path}")
+    if config.audio_enabled:
+        for key, sfx_path in config.sfx.items():
+            _validate_file(sfx_path, f"SFX '{key}' file")
 
     return config

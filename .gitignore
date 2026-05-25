@@ -1,16 +1,19 @@
-.vscode
-venv
-.venv
-.claude
+# Local editor and assistant state
+.vscode/
+.idea/
+.claude/
+
+# Node.js dependencies
 node_modules/
-static/
-/__pycache__/
+
+# Python virtual environments and package/build artifacts
+.venv/
+venv/
+env/
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
 *.pyd
-*.pyi
-*.egg-info
 *.egg
 *.manifest
 *.spec

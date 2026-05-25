@@ -1,23 +1,43 @@
 <template>
   <div class="audio-settings">
-    <label class="switch-row">
-      <span>启用音频混音</span>
-      <input type="checkbox" :checked="store.audio_enabled" @change="store.audio_enabled = $event.target.checked" />
-    </label>
-
-    <label>BGM 文件</label>
-    <div class="file-row">
-      <input :value="store.bgm" @input="store.bgm = $event.target.value" placeholder="选择背景音乐..." />
-      <button class="btn btn-sm" @click="browseBgm">...</button>
+    <div class="audio-mode" role="group" aria-label="音频模式">
+      <button
+        type="button"
+        :class="{ active: !store.audio_enabled }"
+        @click="store.audio_enabled = false"
+      >
+        <strong>模式 1</strong>
+        <span>保留原声</span>
+      </button>
+      <button
+        type="button"
+        :class="{ active: store.audio_enabled }"
+        @click="store.audio_enabled = true"
+      >
+        <strong>模式 2</strong>
+        <span>替换音频</span>
+      </button>
     </div>
 
-    <label>BGM 音量 <span class="val">{{ Math.round(store.bgm_volume * 100) }}%</span>
-      <input type="range" min="0" max="1" step="0.05" :value="store.bgm_volume" @input="store.bgm_volume = parseFloat($event.target.value)" />
-    </label>
+    <div v-if="!store.audio_enabled" class="mode-note">
+      保留源视频中的原始音频，不使用 BGM 和击杀音效。
+    </div>
 
-    <label>SFX 音量 <span class="val">{{ Math.round(store.sfx_volume * 100) }}%</span>
-      <input type="range" min="0" max="1" step="0.05" :value="store.sfx_volume" @input="store.sfx_volume = parseFloat($event.target.value)" />
-    </label>
+    <div v-else class="mix-settings">
+      <label>BGM 文件</label>
+      <div class="file-row">
+        <input :value="store.bgm" @input="store.bgm = $event.target.value" placeholder="点击浏览选择 BGM 文件" />
+        <button class="btn btn-sm" @click="browseBgm">浏览</button>
+      </div>
+
+      <label>BGM 音量 <span class="val">{{ Math.round(store.bgm_volume * 100) }}%</span>
+        <input type="range" min="0" max="1" step="0.05" :value="store.bgm_volume" @input="store.bgm_volume = parseFloat($event.target.value)" />
+      </label>
+
+      <label>SFX 音量 <span class="val">{{ Math.round(store.sfx_volume * 100) }}%</span>
+        <input type="range" min="0" max="1" step="0.05" :value="store.sfx_volume" @input="store.sfx_volume = parseFloat($event.target.value)" />
+      </label>
+    </div>
   </div>
 </template>
 
@@ -46,12 +66,46 @@ async function browseBgm() {
   flex-direction: column;
   gap: 8px;
 }
-.switch-row {
-  flex-direction: row !important;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-primary) !important;
-  font-size: 12px !important;
+.audio-mode {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.audio-mode button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all var(--transition);
+}
+.audio-mode button.active {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #fff;
+}
+.audio-mode strong { font-size: 12px; }
+.audio-mode span { font-size: 11px; }
+.mode-note {
+  padding: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mix-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .file-row {
   display: flex;

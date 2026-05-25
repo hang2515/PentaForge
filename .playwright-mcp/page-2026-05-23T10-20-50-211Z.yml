@@ -1,0 +1,78 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e6]
+      - generic [ref=e10]: PentaForge
+    - generic [ref=e11]: Highlight Configurator
+    - button "开始剪辑" [disabled] [ref=e14]:
+      - img [ref=e15]
+      - text: 开始剪辑
+  - main [ref=e18]:
+    - complementary [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]: 视频素材
+        - button "+ 添加视频" [ref=e22] [cursor=pointer]
+      - generic [ref=e24]:
+        - group [ref=e25]:
+          - generic "音频设置" [ref=e26] [cursor=pointer]:
+            - img [ref=e27]
+            - text: 音频设置
+          - generic [ref=e29]:
+            - generic [ref=e30]:
+              - generic [ref=e31]: 启用音频混音
+              - checkbox "启用音频混音" [checked] [ref=e32]
+            - generic [ref=e33]: BGM 文件
+            - generic [ref=e34]:
+              - textbox "选择背景音乐..." [ref=e35]
+              - button "..." [ref=e36] [cursor=pointer]
+            - generic [ref=e37]:
+              - text: BGM 音量
+              - generic [ref=e38]: 30%
+              - slider "BGM 音量 30%" [ref=e39]: "0.3"
+            - generic [ref=e40]:
+              - text: SFX 音量
+              - generic [ref=e41]: 85%
+              - slider "SFX 音量 85%" [ref=e42]: "0.85"
+        - group [ref=e43]:
+          - generic "转场设置" [ref=e44] [cursor=pointer]:
+            - img [ref=e45]
+            - text: 转场设置
+          - option "淡入淡出" [selected]
+          - option "淡黑"
+          - option "淡白"
+          - option "溶解"
+          - option "左擦除"
+          - option "右擦除"
+          - option "上擦除"
+          - option "下擦除"
+        - group [ref=e47]:
+          - generic "导出设置" [ref=e48] [cursor=pointer]:
+            - img [ref=e49]
+            - text: 导出设置
+          - option "H.264" [selected]
+          - option "H.265"
+          - option "ultrafast"
+          - option "veryfast"
+          - option "fast"
+          - option "medium" [selected]
+          - option "slow"
+        - generic [ref=e51]:
+          - button "保存配置" [ref=e52] [cursor=pointer]
+          - button "加载配置" [ref=e53] [cursor=pointer]
+    - generic [ref=e54]:
+      - generic [ref=e56]:
+        - img [ref=e57]
+        - paragraph [ref=e60]: 添加视频素材开始标记高光片段
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]: 时间轴
+          - generic [ref=e64]: 0:00.0 / 0:00.0
+        - generic [ref=e67]:
+          - button "-" [ref=e68] [cursor=pointer]
+          - generic [ref=e69]: 100%
+          - button "+" [ref=e70] [cursor=pointer]
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]: 高光片段
+          - generic [ref=e74]: 0 个
+        - button "+ 添加片段" [ref=e75] [cursor=pointer]

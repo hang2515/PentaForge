@@ -4,6 +4,7 @@
 source: "gameplay.mp4"
 output: "highlight_output.mp4"
 
+audio_enabled: true
 bgm: "bgm.mp3"
 bgm_volume: 0.3
 
@@ -30,6 +31,9 @@ clips:
     end:   "1:42.0"
     kill_type: "triple_kill"
     label: "First triple kill"
+    transition_after:
+      type: fade
+      duration: 0.3
     # sfx_offset: 9.5   # optional, seconds from clip start
 
   - start: "5:20.0"
