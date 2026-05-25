@@ -1,38 +1,42 @@
 # AGENT.md
 
-本文件定义了 AI 编码代理在 PentaForge 项目中工作时需要遵守的项目规则。
-它整合了当前 `CLAUDE.md` 中的指导原则，并补充了本项目专属的技术、流程和 Git 规则。
+This file defines the project rules for AI coding agents working on PentaForge.
+It incorporates the current `CLAUDE.md` guidance and adds project-specific
+technical, workflow, documentation, and Git rules.
 
-## 项目概览
+For human-readable Chinese documentation, keep `AGENT.zh-CN.md` synchronized
+with this file whenever these rules change.
 
-PentaForge 是一个半自动的《英雄联盟》高光片段剪辑工具。
+## Project Overview
 
-核心流程：
+PentaForge is a semi-automatic League of Legends highlight clipping tool.
+
+Core workflow:
 
 ```text
-录制视频 -> 高光检测 -> 片段提取 -> 音频处理 -> 拼接/转场 -> 最终导出
+recording video -> highlight detection -> clip extraction -> audio processing -> stitching/transitions -> final export
 ```
 
-项目应保持在不使用 Docker 的情况下也可以运行。默认本地环境为：
+The project should remain usable without Docker. The default local setup is:
 
-- Python 虚拟环境：`.venv`
-- Web UI 的 Node.js 依赖
-- 基于 FFmpeg 的视频处理
+- Python virtual environment: `.venv`
+- Node.js dependencies for the Web UI
+- FFmpeg-based video processing
 
-## 当前技术栈
+## Current Technology Stack
 
-后端：
+Backend:
 
 - Python 3.11+
 - FastAPI
 - Uvicorn
-- WebSocket 进度更新
+- WebSocket progress updates
 - `ffmpeg-python`
 - `imageio-ffmpeg`
 - PyYAML
 - pytest
 
-前端：
+Frontend:
 
 - Vue 3
 - Vite
@@ -40,28 +44,28 @@ PentaForge 是一个半自动的《英雄联盟》高光片段剪辑工具。
 - js-yaml
 - Node.js 20+
 
-视频和音频：
+Video and audio:
 
-- FFmpeg 是核心处理引擎。
-- 模式 1 保留原始音频。
-- 模式 2 使用 BGM/SFX 替换音频。
-- 支持全局转场和每个片段的 `transition_after`。
+- FFmpeg is the core processing engine.
+- Mode 1 keeps original audio.
+- Mode 2 replaces audio with BGM/SFX.
+- Global transitions and per-clip `transition_after` are supported.
 
-OCR 和检测：
+OCR and detection:
 
-- PaddleOCR 是第二阶段自动检测的首选 OCR 引擎。
-- OCR 依赖体积较大，应保持为可选依赖。
-- OCR 失败时，必须保留手动编辑时间戳作为兜底方案。
+- PaddleOCR is the preferred OCR engine for Phase 2 automatic detection.
+- OCR dependencies should stay optional because they are large.
+- Manual timestamp editing must remain available as the fallback when OCR fails.
 
-配置：
+Configuration:
 
-- YAML 是面向用户的主要配置格式。
-- JSON 可用于 API 请求体和 Web 内部状态。
-- 配置路径应尽可能相对于配置文件所在位置解析。
+- YAML is the primary user-facing config format.
+- JSON may be supported for API payloads and internal Web state.
+- Config paths should resolve relative to the config file location when possible.
 
-## 本地环境命令
+## Local Setup Commands
 
-在仓库根目录执行：
+From the repository root:
 
 ```powershell
 python -m venv .venv
@@ -69,13 +73,13 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\pentaforge\requirements.txt
 ```
 
-如果存在开发依赖文件，优先使用：
+If a development requirements file exists, prefer it:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r .\pentaforge\requirements-dev.txt
 ```
 
-前端：
+Frontend:
 
 ```powershell
 cd .\pentaforge\web
@@ -83,133 +87,145 @@ npm install
 cd ..\..
 ```
 
-可选 OCR 依赖，存在 `requirements-ocr.txt` 时安装：
+Optional OCR dependencies, when `requirements-ocr.txt` exists:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r .\pentaforge\requirements-ocr.txt
 ```
 
-## 开发命令
+## Development Commands
 
-后端：
+Backend:
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn src.server:app --app-dir .\pentaforge --host 127.0.0.1 --port 8000
 ```
 
-前端：
+Frontend:
 
 ```powershell
 cd .\pentaforge\web
 npm run dev -- --host 127.0.0.1
 ```
 
-测试：
+Tests:
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path -LiteralPath .\pentaforge).Path
 .\.venv\Scripts\python.exe -m pytest .\pentaforge\tests -q
 ```
 
-前端构建：
+Frontend build:
 
 ```powershell
 cd .\pentaforge\web
 npm run build
 ```
 
-## 代理行为规则
+## Agent Behavior Rules
 
-以下规则改编自 `CLAUDE.md`，适用于所有编码代理。
+These rules are adapted from `CLAUDE.md` and apply to all coding agents.
 
-### 编码前先思考
+### Think Before Coding
 
-- 不要默默假设。
-- 如果请求有歧义，说明假设或提出简短问题。
-- 如果存在多种理解，说明取舍。
-- 如果有更简单的方案，应主动指出。
-- 如果不明确到可能影响工作的程度，先停下来澄清。
+- Do not assume silently.
+- If the request is ambiguous, state assumptions or ask a concise question.
+- If multiple interpretations exist, name the tradeoff.
+- If a simpler approach exists, point it out.
+- If something is unclear enough to risk the work, stop and clarify.
 
-### 简单优先
+### Simplicity First
 
-- 编写能解决请求的最少代码。
-- 不添加推测性功能。
-- 不为一次性逻辑创建抽象。
-- 除非用户要求或代码库已有类似模式，否则不新增可配置项。
-- 如果实现明显比必要复杂，完成前先简化。
+- Write the minimum code that solves the request.
+- Do not add speculative features.
+- Do not create abstractions for one-off logic.
+- Do not add configurability unless the user asked for it or the codebase already uses it.
+- If the implementation becomes much larger than necessary, simplify before finishing.
 
-### 精准修改
+### Surgical Changes
 
-- 只修改完成请求所需的文件。
-- 匹配现有代码风格。
-- 不重构无关代码。
-- 除非用户明确要求，不删除无关的废弃代码。
-- 只有当自己的修改导致导入、变量或文件不再需要时，才移除它们。
-- 每一行修改都应能追溯到用户请求。
+- Touch only files required for the request.
+- Match the existing style.
+- Do not refactor unrelated code.
+- Do not delete unrelated dead code unless explicitly asked.
+- Remove imports, variables, or files only when your own changes made them obsolete.
+- Every changed line should trace back to the user request.
 
-### 以目标驱动执行
+### Goal-Driven Execution
 
-- 在大范围修改前定义成功标准。
-- 行为变化时，添加或更新聚焦的测试。
-- 可行时，在最终回复前运行相关测试或构建。
-- 多步骤任务使用简短计划，并随着完成情况更新。
+- Define what success means before broad changes.
+- Add or update focused tests when behavior changes.
+- Run relevant tests/builds before finalizing when feasible.
+- For multi-step work, use a brief plan and update it as work completes.
 
-示例：
+Example:
 
 ```text
-1. 更新解析器 -> 用解析器测试验证
-2. 更新 Web 表单 -> 用 npm build 验证
-3. 更新文档 -> 验证路径和命令
+1. Update parser -> verify with parser tests
+2. Update Web form -> verify with npm build
+3. Update docs -> verify paths and commands
 ```
 
-## 前端规则
+## Frontend Rules
 
-- 保留当前 Vue 3 + Vite 架构。
-- 优先使用现有组件和 Pinia store 模式。
-- UI 应保持实用，并足够紧凑以支持编辑工作流。
-- 不要把应用改成营销落地页。
-- 确保按钮、输入框和标签在小屏幕上能正常显示。
-- 添加控件时，按需贯通 store、YAML 导入导出和 API 请求体。
+- Preserve the current Vue 3 + Vite architecture.
+- Prefer existing components and Pinia store patterns.
+- Keep the UI functional and dense enough for editing workflows.
+- Do not turn the app into a marketing landing page.
+- Ensure buttons, inputs, and labels fit on small screens.
+- When adding controls, wire them through the store, YAML export/import, and API payloads as needed.
 
-## 后端规则
+## Backend Rules
 
-- 除非有明确理由，否则保持 FastAPI API 形状不变。
-- 长时间运行的 FFmpeg/OCR 操作应尽可能通过进度更新可观测。
-- 在解析器/API 边界校验配置输入。
-- 用聚焦测试覆盖 FFmpeg 相关行为。
-- 不要在已提交的配置或源码中硬编码本地绝对路径。
+- Preserve the FastAPI API shape unless there is a clear reason to change it.
+- Keep long-running FFmpeg/OCR operations observable through progress updates when possible.
+- Validate config inputs at the parser/API boundary.
+- Keep FFmpeg-related behavior covered by focused tests.
+- Do not hard-code local absolute paths in committed configs or source.
 
-## 检测/OCR 规则
+## Detection/OCR Rules
 
-- PaddleOCR 是可选依赖，不应成为基础安装的必需项。
-- 如果 OCR 不可用，API 应返回清晰的安装提示。
-- OCR 生成的片段只是候选结果，不是最终事实。
-- 用户必须能够在 OCR 检测后手动新增、删除和调整片段。
-- 修改 ROI 默认值和采样间隔时，必须更新文档。
+- PaddleOCR is optional and should not be required for the base install.
+- If OCR is unavailable, the API should fail with a clear install message.
+- OCR-generated clips are candidates, not final truth.
+- The user must be able to manually add, delete, and adjust clips after OCR detection.
+- ROI defaults and sampling interval must be documented when changed.
 
-## Git 工作流规则
+## Documentation Rules
 
-- 不要直接在 `main` 上开发。
-- 使用功能分支，例如：
+- Keep `AGENT.zh-CN.md` synchronized with `AGENT.md`.
+- When changing a phase feature, update `DESIGN.md`.
+- When changing install/start commands, update local setup documentation.
+- When adding config fields, update:
+  - config examples
+  - parser tests
+  - Web form behavior
+  - YAML import/export logic
+- If a feature is only partially complete, mark it as "basic version" or "in progress" instead of "complete".
+
+## Git Workflow Rules
+
+- Do not develop directly on `main`.
+- Use feature branches such as:
   - `feature/paddleocr-background-job`
   - `feature/sfx-file-mapping`
   - `fix/audio-preserve-mode`
   - `docs/local-setup`
-- 保持 `main` 稳定，并与 `origin/main` 同步。
-- 将代码提交到目标功能分支，然后推送该分支。
-- 提交前始终运行：
+- Keep `main` stable and synchronized with `origin/main`.
+- Commit code to the intended feature branch, then push that branch.
+- Before committing, always run:
 
 ```bash
 git status
 ```
 
-- 不要提交运行时文件、日志、媒体文件、虚拟环境、构建产物或模型权重。
-- 常规分支推送使用 `git push origin <branch>`。
-- 除非明确约定，不要强制推送共享分支。
+- Do not commit runtime files, logs, media, virtual environments, build output, or model weights.
+- Use `git push origin <branch>` for normal branch pushes.
+- Do not force-push shared branches unless explicitly agreed.
 
-## 不应提交的文件
+## Files That Should Not Be Committed
 
-不要提交：
+Do not commit:
 
 - `.venv/`
 - `node_modules/`
@@ -219,48 +235,38 @@ git status
 - `*.log`
 - `*.pid`
 - `.env`
-- 大型原始视频或音频文件
-- 生成的输出视频
-- OCR/模型缓存
-- 模型权重文件，例如 `*.onnx`、`*.pdmodel`、`*.pdiparams`、`*.safetensors`
+- large raw videos or audio files
+- generated output videos
+- OCR/model caches
+- model weight files such as `*.onnx`, `*.pdmodel`, `*.pdiparams`, `*.safetensors`
 
-通常应提交的文件：
+Files that usually should be committed:
 
-- `pentaforge/src/` 下的源代码
-- `pentaforge/web/src/` 下的 Web 源码
-- `pentaforge/tests/` 下的测试
+- Source code under `pentaforge/src/`
+- Web source under `pentaforge/web/src/`
+- Tests under `pentaforge/tests/`
 - `requirements.txt`
-- 存在时提交 `requirements-dev.txt`
-- 存在时提交 `requirements-ocr.txt`
+- `requirements-dev.txt` when present
+- `requirements-ocr.txt` when present
 - `package.json`
 - `package-lock.json`
 - `DESIGN.md`
-- 存在时提交 `LOCAL_SETUP.md`
-- 本 `AGENT.md`
+- `LOCAL_SETUP.md` when present
+- `AGENT.md`
+- `AGENT.zh-CN.md`
 
-## 文档规则
+## Safety Rules
 
-- 修改阶段性功能时，更新 `DESIGN.md`。
-- 修改安装或启动命令时，更新本地环境文档。
-- 添加配置字段时，更新：
-  - 配置示例
-  - 解析器测试
-  - Web 表单行为
-  - YAML 导入导出逻辑
-- 如果功能只完成了一部分，标记为“基础版”或“进行中”，不要标记为“完成”。
+- Never run destructive Git commands such as `git reset --hard` or force-push unless the user explicitly asks.
+- Never delete user files or media assets unless the user explicitly asks.
+- Before removing generated directories, verify the path is inside the repository.
+- Do not commit secrets, local paths, API keys, or personal machine state.
 
-## 安全规则
+## Review Checklist Before Final Response
 
-- 除非用户明确要求，绝不运行 `git reset --hard` 或强制推送等破坏性 Git 命令。
-- 除非用户明确要求，绝不删除用户文件或媒体资产。
-- 删除生成目录前，先确认路径位于仓库内部。
-- 不要提交密钥、本地路径、API key 或个人机器状态。
-
-## 最终回复前检查清单
-
-- 修改是否直接回应了用户请求？
-- 是否避免了无关重构？
-- 是否运行了测试/构建，或说明了未运行原因？
-- 是否需要更新文档或配置示例？
-- `git status` 是否没有意外生成文件？
-- 如果涉及 Git 操作，分支和推送说明是否清楚？
+- Did the change directly answer the user's request?
+- Did it avoid unrelated refactors?
+- Did tests/builds run, or is the reason for not running them stated?
+- Did docs/config examples need updates?
+- Is `git status` free of unexpected generated files?
+- Are branch and push instructions clear if Git work was involved?
