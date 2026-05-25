@@ -30,3 +30,15 @@ __pycache__/
 *.dist-info
 *.egg-info
 .playwright-mcp
+
+# User config files
+*.yaml
+*.yml
+!pentaforge/config/*.yaml
+
+# Video output files
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.webm
