@@ -36,7 +36,7 @@
             @update:clips="clips => store.setAllClips(store.activeSourceIndex, clips)"
             @seek="seekVideo"
           />
-          <DetectionPanel />
+          <DetectionPanel @start-export="showProgress = true" />
         </div>
         <div class="workspace-right">
           <ClipEditor

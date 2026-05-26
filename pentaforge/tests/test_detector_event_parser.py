@@ -4,10 +4,18 @@ from src.detector.event_parser import TextObservation, detect_kill_type, parse_k
 
 
 def test_detect_kill_type_english_and_chinese():
+    assert detect_kill_type("Double Kill") == "double_kill"
     assert detect_kill_type("TRIPLE KILL!") == "triple_kill"
     assert detect_kill_type("quadra kill") == "quadra_kill"
+    assert detect_kill_type("Pentakill") == "penta_kill"
+    assert detect_kill_type("Penta Kill") == "penta_kill"
+    assert detect_kill_type("双杀") == "double_kill"
+    assert detect_kill_type("三杀") == "triple_kill"
+    assert detect_kill_type("四杀") == "quadra_kill"
     assert detect_kill_type("五杀") == "penta_kill"
     assert detect_kill_type("双 杀") == "double_kill"
+    assert detect_kill_type("雙殺") == "double_kill"
+    assert detect_kill_type("五殺") == "penta_kill"
 
 
 def test_parse_kill_events_filters_noise():

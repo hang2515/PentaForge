@@ -1,18 +1,18 @@
 # CLAUDE.md
 
-## 首先阅读
+## Read First
 
-在开始任何工作之前，请先阅读 `AGENT.md`，它包含：
+Before starting any work, read `AGENT.md`. It covers:
 
-- 项目概述与技术栈
-- 本地安装与启动命令
-- 前端/后端/检测模块的开发规则
-- 文档同步与 Git 工作流规范
-- 安全规则与提交前检查清单
+- Project overview and technical stack
+- Local installation and startup commands
+- Development rules for frontend, backend, and detection modules
+- Documentation sync and Git workflow guidelines
+- Safety rules and the pre-commit checklist
 
-## 特别注意
+## Special Notes
 
-以下行为准则优先级最高，覆盖 `AGENT.md` 中的通用规则。
+The following behavior rules have the highest priority and override the general rules in `AGENT.md`.
 
 ### 1. Think Before Coding
 

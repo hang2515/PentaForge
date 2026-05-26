@@ -91,6 +91,53 @@ def events_to_clip_configs(
     return clips
 
 
+def events_to_penta_clip_configs(
+    events: Iterable[KillEvent],
+    *,
+    pre_double_roll: float = 15.0,
+    post_penta_roll: float = 3.0,
+    chain_gap: float = 12.0,
+    merge_gap: float = 2.0,
+    video_duration: float | None = None,
+) -> list[ClipConfig]:
+    """Convert multi-kill chains containing a penta kill into clip configs."""
+    windows: list[ClipWindow] = []
+    for chain in _event_chains(events, chain_gap=chain_gap):
+        penta_events = [event for event in chain if event.kill_type == "penta_kill"]
+        if not penta_events:
+            continue
+
+        start_event = next((event for event in chain if event.kill_type == "double_kill"), chain[0])
+        penta_event = penta_events[-1]
+        start = max(0.0, start_event.time - pre_double_roll)
+        end = penta_event.time + post_penta_roll
+        if video_duration is not None:
+            end = min(float(video_duration), end)
+        windows.append(ClipWindow(start=start, end=end, events=list(chain)))
+
+    clips: list[ClipConfig] = []
+    for index, window in enumerate(merge_clip_windows(windows, merge_gap=merge_gap), start=1):
+        clips.append(
+            ClipConfig(
+                start=window.start,
+                end=window.end,
+                kill_type="penta_kill",
+                label=f"Auto penta kill {index}",
+            )
+        )
+    return clips
+
+
+def _event_chains(events: Iterable[KillEvent], *, chain_gap: float) -> list[list[KillEvent]]:
+    chains: list[list[KillEvent]] = []
+    for event in sorted(events, key=lambda item: item.time):
+        if not chains or event.time - chains[-1][-1].time > chain_gap:
+            chains.append([event])
+            continue
+        chains[-1].append(event)
+    return chains
+
+
 def _kill_rank(kill_type: str) -> int:
     return {
         "double_kill": 2,

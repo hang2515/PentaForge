@@ -23,7 +23,14 @@ from fastapi.staticfiles import StaticFiles
 from . import _ffmpeg_init  # noqa — init bundled FFmpeg binary (patches ffmpeg.run/probe)
 import ffmpeg
 from .config_parser import PipelineConfig, ClipConfig, TransitionConfig, ExportConfig, SourceConfig, load_config, parse_time
-from .detector import Roi, TextObservation, detect_candidates_from_video, events_to_clip_configs, parse_kill_events
+from .detector import (
+    Roi,
+    TextObservation,
+    detect_candidates_from_video,
+    events_to_clip_configs,
+    events_to_penta_clip_configs,
+    parse_kill_events,
+)
 from .pipeline import run_pipeline, run_pipeline_with_progress, PipelineResult
 
 # ── FastAPI app ────────────────────────────────────────────────────────
@@ -373,15 +380,92 @@ def detector_video(body: dict):
         "observations": [_dictify(obs) for obs in result.observations],
         "events": [_dictify(event) for event in result.events],
         "clips": [_dictify(clip) for clip in result.clips],
+        "duration": result.duration,
+    }
+
+
+@app.post("/api/detector/penta-export")
+async def detector_penta_export(body: dict):
+    """Detect penta-kill chains with OCR and start an export job."""
+    source = body.get("source", "")
+    if not source:
+        raise HTTPException(status_code=400, detail="Missing source video path")
+
+    roi_raw = body.get("roi") or {}
+    roi = Roi(
+        x=float(roi_raw.get("x", 0.2)),
+        y=float(roi_raw.get("y", 0.06)),
+        width=float(roi_raw.get("width", 0.6)),
+        height=float(roi_raw.get("height", 0.24)),
+    )
+
+    try:
+        result = detect_candidates_from_video(
+            source,
+            roi=roi,
+            interval=float(body.get("interval", 0.5)),
+            min_confidence=float(body.get("min_confidence", 0.3)),
+            dedupe_window=float(body.get("dedupe_window", 1.5)),
+            max_frames=body.get("max_frames"),
+        )
+        clips = events_to_penta_clip_configs(
+            result.events,
+            pre_double_roll=float(body.get("pre_double_roll", 15.0)),
+            post_penta_roll=float(body.get("post_penta_roll", 3.0)),
+            chain_gap=float(body.get("chain_gap", 12.0)),
+            merge_gap=float(body.get("merge_gap", 2.0)),
+            video_duration=result.duration,
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=501, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not clips:
+        return {
+            "job_id": None,
+            "observations": [_dictify(obs) for obs in result.observations],
+            "events": [_dictify(event) for event in result.events],
+            "clips": [],
+            "duration": result.duration,
+            "message": "No penta-kill chain detected; export was not started.",
+        }
+
+    config = _config_from_dict({
+        "source": source,
+        "output": body.get("output", "highlight_penta.mp4"),
+        "clips": [_dictify(clip) for clip in clips],
+        "bgm": body.get("bgm", ""),
+        "bgm_volume": body.get("bgm_volume", 0.3),
+        "sfx": body.get("sfx", {}),
+        "sfx_volume": body.get("sfx_volume", 0.8),
+        "audio_enabled": body.get("audio_enabled", False),
+        "transitions": body.get("transitions", {}),
+        "export": body.get("export", {}),
+        "temp_dir": body.get("temp_dir", ""),
+    })
+    job_id = _start_pipeline_job(config, asyncio.get_running_loop())
+    return {
+        "job_id": job_id,
+        "observations": [_dictify(obs) for obs in result.observations],
+        "events": [_dictify(event) for event in result.events],
+        "clips": [_dictify(clip) for clip in clips],
+        "duration": result.duration,
     }
 
 
 @app.post("/api/pipeline/run")
 async def pipeline_run(body: dict):
     config = _config_from_dict(body)
+    job_id = _start_pipeline_job(config, asyncio.get_running_loop())
+    return {"job_id": job_id}
+
+
+def _start_pipeline_job(config: PipelineConfig, loop) -> str:
     job_id = str(uuid.uuid4())[:8]
     _jobs[job_id] = {"status": "running", "progress": [], "result": None}
-    loop = asyncio.get_event_loop()
 
     def _run():
         def cb(step, total, message):
@@ -414,7 +498,7 @@ async def pipeline_run(body: dict):
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
-    return {"job_id": job_id}
+    return job_id
 
 
 @app.get("/api/pipeline/status/{job_id}")

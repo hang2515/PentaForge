@@ -30,6 +30,8 @@ __pycache__/
 *.dist-info
 *.egg-info
 .playwright-mcp
+.pytest_cache/
+tmp/
 
 # User config files
 *.yaml
@@ -42,3 +44,6 @@ __pycache__/
 *.mkv
 *.mov
 *.webm
+
+# Generated frontend build output
+pentaforge/static/

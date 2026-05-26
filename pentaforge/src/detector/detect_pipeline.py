@@ -17,6 +17,7 @@ from .ocr_reader import OcrReader
 
 @dataclass
 class DetectionResult:
+    duration: float
     observations: list[TextObservation]
     events: list[KillEvent]
     clips: list[ClipConfig]
@@ -81,4 +82,4 @@ def detect_candidates_from_video(
         merge_gap=merge_gap,
         video_duration=duration,
     )
-    return DetectionResult(observations=observations, events=events, clips=clips)
+    return DetectionResult(duration=duration, observations=observations, events=events, clips=clips)

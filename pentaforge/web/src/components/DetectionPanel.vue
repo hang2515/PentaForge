@@ -24,6 +24,15 @@
       <label>最小置信度
         <input type="number" step="0.05" min="0" max="1" v-model.number="minConfidence" />
       </label>
+      <label>链间隔 (秒)
+        <input type="number" step="0.5" min="0" v-model.number="chainGap" />
+      </label>
+      <label>五杀尾帧 (秒)
+        <input type="number" step="0.5" min="0" v-model.number="postPentaRoll" />
+      </label>
+      <label>双杀前推 (秒)
+        <input type="number" step="0.5" min="0" v-model.number="preDoubleRoll" />
+      </label>
     </div>
 
     <div class="roi-controls">
@@ -50,7 +59,12 @@
       <button class="btn success" @click="addAllCandidates" :disabled="!candidates.length">
         添加全部到手动片段
       </button>
+      <button class="btn penta" @click="exportPenta" :disabled="loading || exporting || !store.sourcePath">
+        {{ exporting ? '五杀导出中...' : '一键识别五杀并导出' }}
+      </button>
     </div>
+
+    <div v-if="exportMessage" class="notice">{{ exportMessage }}</div>
 
     <div v-if="events.length" class="events">
       <div v-for="event in events" :key="`${event.time}-${event.kill_type}`" class="event-row">
@@ -78,15 +92,21 @@ import { useConfigStore } from '../stores/config.js'
 import * as api from '../api/client.js'
 
 const store = useConfigStore()
+const emit = defineEmits(['start-export'])
 const interval = ref(0.5)
 const maxFrames = ref(120)
 const preRoll = ref(8)
 const postRoll = ref(4)
 const mergeGap = ref(2)
+const chainGap = ref(12)
+const preDoubleRoll = ref(15)
+const postPentaRoll = ref(3)
 const minConfidence = ref(0.3)
 const roi = ref({ x: 0.2, y: 0.06, width: 0.6, height: 0.24 })
 const loading = ref(false)
+const exporting = ref(false)
 const error = ref('')
+const exportMessage = ref('')
 const events = ref([])
 const candidates = ref([])
 
@@ -114,6 +134,60 @@ async function detectFromVideo() {
     error.value = err.message
   } finally {
     loading.value = false
+  }
+}
+
+async function exportPenta() {
+  error.value = ''
+  exportMessage.value = ''
+  if (!store.sourcePath) {
+    error.value = '请先选择源视频'
+    return
+  }
+  exporting.value = true
+  try {
+    const result = await api.exportPentaKill({
+      source: store.sourcePath,
+      output: store.output,
+      interval: interval.value,
+      max_frames: maxFrames.value || null,
+      roi: roi.value,
+      min_confidence: minConfidence.value,
+      pre_double_roll: preDoubleRoll.value,
+      post_penta_roll: postPentaRoll.value,
+      chain_gap: chainGap.value,
+      merge_gap: mergeGap.value,
+      bgm: store.bgm,
+      bgm_volume: store.bgm_volume,
+      sfx: store.sfx,
+      sfx_volume: store.sfx_volume,
+      audio_enabled: store.audio_enabled,
+      transitions: store.transitions,
+      export: store.export,
+      temp_dir: store.temp_dir,
+    })
+    events.value = result.events || []
+    candidates.value = result.clips || []
+    if (!result.job_id) {
+      exportMessage.value = result.message || '未识别到五杀链，未启动导出'
+      return
+    }
+    store.activeJobId = result.job_id
+    store.pipelineMessages = [{ type: 'step', step: 0, total: 1, message: '五杀片段已识别，导出任务已启动' }]
+    emit('start-export', result.job_id)
+    const socket = api.connectProgress(result.job_id, msg => {
+      store.addPipelineMessage(msg)
+      if (msg.type === 'complete' || msg.type === 'error') {
+        socket.close()
+      }
+    }, () => {}, err => {
+      console.error('Progress socket error:', err)
+    })
+    exportMessage.value = `导出任务已启动：${result.job_id}`
+  } catch (err) {
+    error.value = err.message
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -222,9 +296,20 @@ input {
   color: #fff;
 }
 .success:hover { background: #219a52; }
+.penta {
+  background: #b8860b;
+  border-color: #b8860b;
+  color: #fff;
+}
+.penta:hover { background: #9a7000; }
 .error {
   margin-top: 6px;
   color: #c0392b;
+  font-size: 12px;
+}
+.notice {
+  margin-top: 6px;
+  color: #5c3d2e;
   font-size: 12px;
 }
 .events,

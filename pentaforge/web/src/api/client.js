@@ -94,6 +94,19 @@ export async function detectVideoClips(payload) {
   return res.json()
 }
 
+export async function exportPentaKill(payload) {
+  const res = await fetch('/api/detector/penta-export', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to export penta-kill clips')
+  }
+  return res.json()
+}
+
 export async function openFileDialog(title, filetypes, initialdir) {
   const res = await fetch('/api/file-dialog', {
     method: 'POST',
